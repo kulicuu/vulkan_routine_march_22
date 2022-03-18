@@ -167,152 +167,90 @@ unsafe fn routine_pure_procedural
         Default::default()
     };
     let surface = surface::create_surface(&instance, &window, None).unwrap();
-    let (physical_device, queue_family, format, present_mode, device_properties) =
-        instance.enumerate_physical_devices(None)
-            .unwrap()
-            .into_iter()
-            .filter_map(|physical_device| {
-                let queue_family = match instance
-                    .get_physical_device_queue_family_properties(physical_device, None)
-                    .into_iter()
-                    .enumerate()
-                    .position(|(i, queue_family_properties)| {
-                        queue_family_properties
-                            .queue_flags
-                            .contains(vk::QueueFlags::GRAPHICS)
-                            // (
-                            //     .contains(vk::QueueFlags::GRAPHICS)
-                            //     && .contains(vk::QueueFlags::TRANSFER)
-                            // )
-                            // .contains(vk::QueueFlags::TRANSFER)
-                            && instance
-                                .get_physical_device_surface_support_khr(
-                                    physical_device,
-                                    i as u32,
-                                    surface,
-                                )
-                                .unwrap()
-                    }) {
-                    Some(queue_family) => queue_family as u32,
-                    None => return None,
-                };
-                let formats = instance
-                    .get_physical_device_surface_formats_khr(physical_device, surface, None)
-                    .unwrap();
-                let format = match formats
-                    .iter()
-                    .find(|surface_format| {
-                        (surface_format.format == vk::Format::B8G8R8A8_SRGB
-                            || surface_format.format == vk::Format::R8G8B8A8_SRGB)
-                            && surface_format.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR_KHR
-                    })
-                    .or_else(|| formats.get(0))
-                {
-                    Some(surface_format) => *surface_format,
-                    None => return None,
-                };
-                let present_mode = instance
-                    .get_physical_device_surface_present_modes_khr(physical_device, surface, None)
-                    .unwrap()
-                    .into_iter()
-                    .find(|present_mode| present_mode == &vk::PresentModeKHR::MAILBOX_KHR)
-                    .unwrap_or(vk::PresentModeKHR::FIFO_KHR);
-                let supported_device_extensions = instance
-                    .enumerate_device_extension_properties(physical_device, None, None)
-                    .unwrap();
-                let device_extensions_supported =
-                    device_extensions.iter().all(|device_extension| {
-                        let device_extension = CStr::from_ptr(*device_extension);
 
-                        supported_device_extensions.iter().any(|properties| {
-                            CStr::from_ptr(properties.extension_name.as_ptr()) == device_extension
-                        })
-                    });
-                if !device_extensions_supported {
-                    return None;
-                }
-                let device_properties = instance.get_physical_device_properties(physical_device);
-                Some((
-                    physical_device,
-                    queue_family,
-                    format,
-                    present_mode,
-                    device_properties,
-                ))
-            })
-            .max_by_key(|(_, _, _, _, properties)| match properties.device_type {
-                vk::PhysicalDeviceType::DISCRETE_GPU => 2,
-                vk::PhysicalDeviceType::INTEGRATED_GPU => 1,
-                _ => 0,
-            })
-            .expect("No suitable physical device found");
-        let queue_info = vec![vk::DeviceQueueCreateInfoBuilder::new()
-            .queue_family_index(queue_family)
-            .queue_priorities(&[1.0])];
-        let features = vk::PhysicalDeviceFeaturesBuilder::new();
-        let device_info = vk::DeviceCreateInfoBuilder::new()
-            .queue_create_infos(&queue_info)
-            .enabled_features(&features)
-            .enabled_extension_names(&device_extensions)
-            .enabled_layer_names(&device_layers);
-        let device = Arc::new(DeviceLoader::new(&instance, physical_device, &device_info).unwrap());
-        let queue = device.get_device_queue(queue_family, 0);
-        let surface_caps = instance.get_physical_device_surface_capabilities_khr(physical_device, surface).unwrap();
-        let mut image_count = surface_caps.min_image_count + 1;
-        if surface_caps.max_image_count > 0 && image_count > surface_caps.max_image_count {
-            image_count = surface_caps.max_image_count;
+
+    let (physical_device, queue_family, format, present_mode, device_properties) = create_precursors
+    (
+        &instance,
+        surface.clone(),
+    ).unwrap();
+
+
+
+
+    println!("\n\n\nUsing physical device: {:?}\n\n\n", CStr::from_ptr(device_properties.device_name.as_ptr()));
+
+
+    let queue_info = vec![vk::DeviceQueueCreateInfoBuilder::new()
+        .queue_family_index(queue_family)
+        .queue_priorities(&[1.0])];
+    let features = vk::PhysicalDeviceFeaturesBuilder::new();
+    let device_info = vk::DeviceCreateInfoBuilder::new()
+        .queue_create_infos(&queue_info)
+        .enabled_features(&features)
+        .enabled_extension_names(&device_extensions)
+        .enabled_layer_names(&device_layers);
+    let device = Arc::new(DeviceLoader::new(&instance, physical_device, &device_info).unwrap());
+    let queue = device.get_device_queue(queue_family, 0);
+    let surface_caps = instance.get_physical_device_surface_capabilities_khr(physical_device, surface).unwrap();
+    let mut image_count = surface_caps.min_image_count + 1;
+    if surface_caps.max_image_count > 0 && image_count > surface_caps.max_image_count {
+        image_count = surface_caps.max_image_count;
+    }
+
+
+
+    let swapchain_image_extent = match surface_caps.current_extent {
+        vk::Extent2D {
+            width: u32::MAX,
+            height: u32::MAX,
+        } => {
+            let PhysicalSize { width, height } = window.inner_size();
+            vk::Extent2D { width, height }
         }
-        let swapchain_image_extent = match surface_caps.current_extent {
-            vk::Extent2D {
-                width: u32::MAX,
-                height: u32::MAX,
-            } => {
-                let PhysicalSize { width, height } = window.inner_size();
-                vk::Extent2D { width, height }
-            }
-            normal => normal,
-        };
-        let swapchain_info = vk::SwapchainCreateInfoKHRBuilder::new()
-            .surface(surface)
-            .min_image_count(image_count)
-            .image_format(format.format)
-            .image_color_space(format.color_space)
-            .image_extent(swapchain_image_extent)
-            .image_array_layers(1)
-            .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
-            .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .pre_transform(surface_caps.current_transform)
-            .composite_alpha(vk::CompositeAlphaFlagBitsKHR::OPAQUE_KHR)
-            .present_mode(present_mode)
-            .clipped(true)
-            .old_swapchain(vk::SwapchainKHR::null());
-        let swapchain = device.create_swapchain_khr(&swapchain_info, None).unwrap();
-        let swapchain_images = device.get_swapchain_images_khr(swapchain, None).unwrap();
-        let swapchain_image_views: Vec<_> = swapchain_images
-            .iter()
-            .map(|swapchain_image| {
-                let image_view_info = vk::ImageViewCreateInfoBuilder::new()
-                    .image(*swapchain_image)
-                    .view_type(vk::ImageViewType::_2D)
-                    .format(format.format)
-                    .components(vk::ComponentMapping {
-                        r: vk::ComponentSwizzle::IDENTITY,
-                        g: vk::ComponentSwizzle::IDENTITY,
-                        b: vk::ComponentSwizzle::IDENTITY,
-                        a: vk::ComponentSwizzle::IDENTITY,
-                    })
-                    .subresource_range(
-                        vk::ImageSubresourceRangeBuilder::new()
-                            .aspect_mask(vk::ImageAspectFlags::COLOR)
-                            .base_mip_level(0)
-                            .level_count(1)
-                            .base_array_layer(0)
-                            .layer_count(1)
-                            .build(),
-                    );
-                device.create_image_view(&image_view_info, None).unwrap()
-            })
-            .collect();
+        normal => normal,
+    };
+    let swapchain_info = vk::SwapchainCreateInfoKHRBuilder::new()
+        .surface(surface)
+        .min_image_count(image_count)
+        .image_format(format.format)
+        .image_color_space(format.color_space)
+        .image_extent(swapchain_image_extent)
+        .image_array_layers(1)
+        .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT)
+        .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
+        .pre_transform(surface_caps.current_transform)
+        .composite_alpha(vk::CompositeAlphaFlagBitsKHR::OPAQUE_KHR)
+        .present_mode(present_mode)
+        .clipped(true)
+        .old_swapchain(vk::SwapchainKHR::null());
+    let swapchain = device.create_swapchain_khr(&swapchain_info, None).unwrap();
+    let swapchain_images = device.get_swapchain_images_khr(swapchain, None).unwrap();
+    let swapchain_image_views: Vec<_> = swapchain_images
+        .iter()
+        .map(|swapchain_image| {
+            let image_view_info = vk::ImageViewCreateInfoBuilder::new()
+                .image(*swapchain_image)
+                .view_type(vk::ImageViewType::_2D)
+                .format(format.format)
+                .components(vk::ComponentMapping {
+                    r: vk::ComponentSwizzle::IDENTITY,
+                    g: vk::ComponentSwizzle::IDENTITY,
+                    b: vk::ComponentSwizzle::IDENTITY,
+                    a: vk::ComponentSwizzle::IDENTITY,
+                })
+                .subresource_range(
+                    vk::ImageSubresourceRangeBuilder::new()
+                        .aspect_mask(vk::ImageAspectFlags::COLOR)
+                        .base_mip_level(0)
+                        .level_count(1)
+                        .base_array_layer(0)
+                        .layer_count(1)
+                        .build(),
+                );
+            device.create_image_view(&image_view_info, None).unwrap()
+        })
+        .collect();
 
     let command_pool_info = vk::CommandPoolCreateInfoBuilder::new()
             .queue_family_index(queue_family)
@@ -322,86 +260,36 @@ unsafe fn routine_pure_procedural
     
     
     
-    let model_path: &'static str = "assets/terrain__002__.obj";
-    let (models, materials) = tobj::load_obj(&model_path, &tobj::LoadOptions::default()).expect("Failed to load model object!");
-    let model = models[0].clone();
-    let materials = materials.unwrap();
-    let material = materials.clone().into_iter().nth(0).unwrap();
-    let mut vertices_terr = vec![];
-    let mesh = model.mesh;
-    let total_vertices_count = mesh.positions.len() / 3;
-    for i in 0..total_vertices_count {
-        let vertex = VertexV3 {
-            pos: [
-                mesh.positions[i * 3],
-                mesh.positions[i * 3 + 1],
-                mesh.positions[i * 3 + 2],
-                1.0,
-            ],
-            color: [0.8, 0.20, 0.30, 0.40],
-        };
-        vertices_terr.push(vertex);
-    };
-    let mut indices_terr = mesh.indices.clone(); 
+ 
+
+
+    let (mut vertices_terr, mut indices_terr) = load_model().unwrap();
 
     let physical_device_memory_properties = instance.get_physical_device_memory_properties(physical_device);
 
+
+
+
+
     let vb_size = ((::std::mem::size_of_val(&(3.14 as f32))) * 9 * vertices_terr.len()) as vk::DeviceSize;
     let ib_size = (::std::mem::size_of_val(&(10 as u32)) * indices_terr.len()) as vk::DeviceSize;
+    
+    let ib = buffer_indices
+    (
+        &device,
+        queue,
+        command_pool,
+        &mut vertices_terr, 
+        &mut indices_terr,
+    ).unwrap();
+    
+    
+    
 
-    let info = vk::BufferCreateInfoBuilder::new()
-        .size(ib_size)
-        .usage(vk::BufferUsageFlags::TRANSFER_SRC)
-        .sharing_mode(vk::SharingMode::EXCLUSIVE);
-    let sb = device.create_buffer(&info, None).expect("Failed to create a staging buffer.");
-    let mem_reqs = device.get_buffer_memory_requirements(sb);
-    let alloc_info = vk::MemoryAllocateInfoBuilder::new()
-        .allocation_size(mem_reqs.size)
-        .memory_type_index(2);
-    let sb_mem = device.allocate_memory(&alloc_info, None).unwrap();
-    device.bind_buffer_memory(sb, sb_mem, 0).unwrap();
-    let data_ptr = device.map_memory(
-        sb_mem,
-        0,
-        vk::WHOLE_SIZE,
-        vk::MemoryMapFlags::empty(),
-    ).unwrap() as *mut u32;
-    data_ptr.copy_from_nonoverlapping(indices_terr.as_ptr(), indices_terr.len());
-    device.unmap_memory(sb_mem);
-    // Todo: add destruction if this is still working
-    let info = vk::BufferCreateInfoBuilder::new()
-        .size(ib_size)
-        .usage(vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER)
-        .sharing_mode(vk::SharingMode::EXCLUSIVE);
-    let ib = device.create_buffer(&info, None)
-        .expect("Failed to create index buffer.");
-    let mem_reqs = device.get_buffer_memory_requirements(ib);
-    let alloc_info = vk::MemoryAllocateInfoBuilder::new()
-        .allocation_size(mem_reqs.size)
-        .memory_type_index(1);
-    let ib_mem = device.allocate_memory(&alloc_info, None).unwrap();
-    device.bind_buffer_memory(ib, ib_mem, 0);
 
-    let info = vk::CommandBufferAllocateInfoBuilder::new()
-        .command_pool(command_pool)
-        .level(vk::CommandBufferLevel::PRIMARY)
-        .command_buffer_count(1);
-    let cb = device.allocate_command_buffers(&info).unwrap()[0];
-    let info =  vk::CommandBufferBeginInfoBuilder::new()
-        .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
-    device.begin_command_buffer(cb, &info).expect("Failed begin_command_buffer.");
-    let info =  vk::BufferCopyBuilder::new()
-        .src_offset(0)
-        .dst_offset(0)
-        .size(ib_size);
-    device.cmd_copy_buffer(cb, sb, ib, &[info]);
-    let slice = &[cb];
-    device.end_command_buffer(cb).expect("Failed to end command buffer.");
-    let info = vk::SubmitInfoBuilder::new()
-        .wait_semaphores(&[])
-        .command_buffers(slice)
-        .signal_semaphores(&[]);
-    device.queue_submit(queue, &[info], vk::Fence::null()).expect("Failed to queue submit.");
+
+
+
 
     let info = vk::BufferCreateInfoBuilder::new()
         .size(vb_size)
@@ -625,10 +513,10 @@ unsafe fn routine_pure_procedural
     let entry_point = CString::new("main").unwrap();
     let vert_decoded = utils::decode_spv(SHADER_VERT).unwrap();
     let module_info = vk::ShaderModuleCreateInfoBuilder::new().code(&vert_decoded);
-    let shader_vert = unsafe { device.create_shader_module(&module_info, None) }.unwrap();
+    let shader_vert = device.create_shader_module(&module_info, None).unwrap();
     let frag_decoded = utils::decode_spv(SHADER_FRAG).unwrap();
     let module_info = vk::ShaderModuleCreateInfoBuilder::new().code(&frag_decoded);
-    let shader_frag = unsafe { device.create_shader_module(&module_info, None) }.unwrap();
+    let shader_frag = device.create_shader_module(&module_info, None).unwrap();
     let shader_stages = vec![
         vk::PipelineShaderStageCreateInfoBuilder::new()
             .stage(vk::ShaderStageFlagBits::VERTEX)
@@ -1025,3 +913,294 @@ unsafe fn create_buffer
         .expect("Failed to bind buffer.");
     (buffer, buffer_memory)
 }
+
+
+
+fn load_model
+<'a>
+() 
+-> Result<(Vec<VertexV3>, Vec<u32>), &'a str> 
+{
+    let model_path: & str = "assets/terrain__002__.obj";
+    let (models, materials) = tobj::load_obj(&model_path, &tobj::LoadOptions::default()).expect("Failed to load model object!");
+    let model = models[0].clone();
+    let materials = materials.unwrap();
+    let material = materials.clone().into_iter().nth(0).unwrap();
+    let mut vertices_terr = vec![];
+    let mesh = model.mesh;
+    let total_vertices_count = mesh.positions.len() / 3;
+    for i in 0..total_vertices_count {
+        let vertex = VertexV3 {
+            pos: [
+                mesh.positions[i * 3],
+                mesh.positions[i * 3 + 1],
+                mesh.positions[i * 3 + 2],
+                1.0,
+            ],
+            color: [0.8, 0.20, 0.30, 0.40],
+        };
+        vertices_terr.push(vertex);
+    };
+    let mut indices_terr_full = mesh.indices.clone(); 
+    let mut indices_terr = vec![];
+    for i in 0..(indices_terr_full.len() / 2) {
+        indices_terr.push(indices_terr_full[i]);
+    }
+    Ok((vertices_terr, indices_terr))
+}
+    // let model_path: &'static str = "assets/terrain__002__.obj";
+    // let (models, materials) = tobj::load_obj(&model_path, &tobj::LoadOptions::default()).expect("Failed to load model object!");
+    // let model = models[0].clone();
+    // let materials = materials.unwrap();
+    // let material = materials.clone().into_iter().nth(0).unwrap();
+    // let mut vertices_terr = vec![];
+    // let mesh = model.mesh;
+    // let total_vertices_count = mesh.positions.len() / 3;
+    // for i in 0..total_vertices_count {
+    //     let vertex = VertexV3 {
+    //         pos: [
+    //             mesh.positions[i * 3],
+    //             mesh.positions[i * 3 + 1],
+    //             mesh.positions[i * 3 + 2],
+    //             1.0,
+    //         ],
+    //         color: [0.8, 0.20, 0.30, 0.40],
+    //     };
+    //     vertices_terr.push(vertex);
+    // };
+    // let mut indices_terr = mesh.indices.clone();
+
+
+
+unsafe fn create_precursors
+<'a>
+(
+    instance: &InstanceLoader,
+    surface: vk::SurfaceKHR,
+)
+-> Result<(vk::PhysicalDevice, u32, vk::SurfaceFormatKHR, vk::PresentModeKHR, vk::PhysicalDeviceProperties), &'a str>
+{
+    let device_extensions = vec![  // trying to type the contents of this vector to be able to pass between functions..todo.
+        vk::KHR_SWAPCHAIN_EXTENSION_NAME,
+        vk::KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+        vk::KHR_RAY_QUERY_EXTENSION_NAME,
+        vk::KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+        vk::KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+        vk::KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME,
+        vk::KHR_SPIRV_1_4_EXTENSION_NAME,
+        vk::KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
+        vk::EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
+    ];
+
+    let (physical_device, queue_family, format, present_mode, device_properties) =
+
+    instance.enumerate_physical_devices(None)
+    .unwrap()
+    .into_iter()
+    .filter_map(|physical_device| {
+        let queue_family = match instance
+            .get_physical_device_queue_family_properties(physical_device, None)
+            .into_iter()
+            .enumerate()
+            .position(|(i, queue_family_properties)| {
+                queue_family_properties
+                    .queue_flags
+                    .contains(vk::QueueFlags::GRAPHICS)
+                    // (
+                    //     .contains(vk::QueueFlags::GRAPHICS)
+                    //     && .contains(vk::QueueFlags::TRANSFER)
+                    // )
+                    // .contains(vk::QueueFlags::TRANSFER)
+                    && instance
+                        .get_physical_device_surface_support_khr(
+                            physical_device,
+                            i as u32,
+                            surface,
+                        )
+                        .unwrap()
+            }) {
+            Some(queue_family) => queue_family as u32,
+            None => return None,
+        };
+        let formats = instance
+            .get_physical_device_surface_formats_khr(physical_device, surface, None)
+            .unwrap();
+        let format = match formats
+            .iter()
+            .find(|surface_format| {
+                (surface_format.format == vk::Format::B8G8R8A8_SRGB
+                    || surface_format.format == vk::Format::R8G8B8A8_SRGB)
+                    && surface_format.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR_KHR
+            })
+            .or_else(|| formats.get(0))
+        {
+            Some(surface_format) => *surface_format,
+            None => return None,
+        };
+        let present_mode = instance
+            .get_physical_device_surface_present_modes_khr(physical_device, surface, None)
+            .unwrap()
+            .into_iter()
+            .find(|present_mode| present_mode == &vk::PresentModeKHR::MAILBOX_KHR)
+            .unwrap_or(vk::PresentModeKHR::FIFO_KHR);
+        let supported_device_extensions = instance
+            .enumerate_device_extension_properties(physical_device, None, None)
+            .unwrap();
+        let device_extensions_supported =
+            device_extensions.iter().all(|device_extension| {
+                let device_extension = CStr::from_ptr(*device_extension);
+
+                supported_device_extensions.iter().any(|properties| {
+                    CStr::from_ptr(properties.extension_name.as_ptr()) == device_extension
+                })
+            });
+        if !device_extensions_supported {
+            return None;
+        }
+        let device_properties = instance.get_physical_device_properties(physical_device);
+        Some((
+            physical_device,
+            queue_family,
+            format,
+            present_mode,
+            device_properties,
+        ))
+    })
+    .max_by_key(|(_, _, _, _, properties)| match properties.device_type {
+        vk::PhysicalDeviceType::DISCRETE_GPU => 2,
+        vk::PhysicalDeviceType::INTEGRATED_GPU => 1,
+        _ => 0,
+    })
+    .expect("No suitable physical device found");
+
+    Ok((physical_device, queue_family, format, present_mode, device_properties))
+
+
+}
+
+
+
+unsafe fn buffer_indices
+<'a>
+(
+    device: &DeviceLoader,
+    queue: vk::Queue,
+    command_pool: vk::CommandPool,
+    vertices: &mut Vec<VertexV3>,
+    indices: &mut Vec<u32>,
+)
+-> Result<(vk::Buffer), &'a str>
+{
+    // let vb_size = ((::std::mem::size_of_val(&(3.14 as f32))) * 9 * vertices_terr.len()) as vk::DeviceSize;
+    let ib_size = (::std::mem::size_of_val(&(10 as u32)) * indices.len()) as vk::DeviceSize;
+    let info = vk::BufferCreateInfoBuilder::new()
+        .size(ib_size)
+        .usage(vk::BufferUsageFlags::TRANSFER_SRC)
+        .sharing_mode(vk::SharingMode::EXCLUSIVE);
+    let sb = device.create_buffer(&info, None).expect("Failed to create a staging buffer.");
+    let mem_reqs = device.get_buffer_memory_requirements(sb);
+    let info = vk::MemoryAllocateInfoBuilder::new()
+        .allocation_size(mem_reqs.size)
+        .memory_type_index(2);
+    let sb_mem = device.allocate_memory(&info, None).unwrap();
+    device.bind_buffer_memory(sb, sb_mem, 0).unwrap();
+    let data_ptr = device.map_memory(
+        sb_mem,
+        0,
+        vk::WHOLE_SIZE,
+        vk::MemoryMapFlags::empty(),
+    ).unwrap() as *mut u32;
+    data_ptr.copy_from_nonoverlapping(indices.as_ptr(), indices.len());
+    device.unmap_memory(sb_mem);
+    // Todo: add destruction if this is still working
+    let info = vk::BufferCreateInfoBuilder::new()
+        .size(ib_size)
+        .usage(vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER)
+        .sharing_mode(vk::SharingMode::EXCLUSIVE);
+    let ib = device.create_buffer(&info, None)
+        .expect("Failed to create index buffer.");
+    let mem_reqs = device.get_buffer_memory_requirements(ib);
+    let alloc_info = vk::MemoryAllocateInfoBuilder::new()
+        .allocation_size(mem_reqs.size)
+        .memory_type_index(1);
+    let ib_mem = device.allocate_memory(&alloc_info, None).unwrap();
+    device.bind_buffer_memory(ib, ib_mem, 0);
+    let info = vk::CommandBufferAllocateInfoBuilder::new()
+        .command_pool(command_pool)
+        .level(vk::CommandBufferLevel::PRIMARY)
+        .command_buffer_count(1);
+    let cb = device.allocate_command_buffers(&info).unwrap()[0];
+    let info =  vk::CommandBufferBeginInfoBuilder::new()
+        .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+    device.begin_command_buffer(cb, &info).expect("Failed begin_command_buffer.");
+    let info =  vk::BufferCopyBuilder::new()
+        .src_offset(0)
+        .dst_offset(0)
+        .size(ib_size);
+    device.cmd_copy_buffer(cb, sb, ib, &[info]);
+    let slice = &[cb];
+    device.end_command_buffer(cb).expect("Failed to end command buffer.");
+    let info = vk::SubmitInfoBuilder::new()
+        .wait_semaphores(&[])
+        .command_buffers(slice)
+        .signal_semaphores(&[]);
+    device.queue_submit(queue, &[info], vk::Fence::null()).expect("Failed to queue submit.");
+    Ok((ib))
+}
+
+
+
+
+    // let info = vk::BufferCreateInfoBuilder::new()
+    //     .size(ib_size)
+    //     .usage(vk::BufferUsageFlags::TRANSFER_SRC)
+    //     .sharing_mode(vk::SharingMode::EXCLUSIVE);
+    // let sb = device.create_buffer(&info, None).expect("Failed to create a staging buffer.");
+    // let mem_reqs = device.get_buffer_memory_requirements(sb);
+    // let info = vk::MemoryAllocateInfoBuilder::new()
+    //     .allocation_size(mem_reqs.size)
+    //     .memory_type_index(2);
+    // let sb_mem = device.allocate_memory(&info, None).unwrap();
+    // device.bind_buffer_memory(sb, sb_mem, 0).unwrap();
+    // let data_ptr = device.map_memory(
+    //     sb_mem,
+    //     0,
+    //     vk::WHOLE_SIZE,
+    //     vk::MemoryMapFlags::empty(),
+    // ).unwrap() as *mut u32;
+    // data_ptr.copy_from_nonoverlapping(indices_terr.as_ptr(), indices_terr.len());
+    // device.unmap_memory(sb_mem);
+    // // Todo: add destruction if this is still working
+    // let info = vk::BufferCreateInfoBuilder::new()
+    //     .size(ib_size)
+    //     .usage(vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER)
+    //     .sharing_mode(vk::SharingMode::EXCLUSIVE);
+    // let ib = device.create_buffer(&info, None)
+    //     .expect("Failed to create index buffer.");
+    // let mem_reqs = device.get_buffer_memory_requirements(ib);
+    // let alloc_info = vk::MemoryAllocateInfoBuilder::new()
+    //     .allocation_size(mem_reqs.size)
+    //     .memory_type_index(1);
+    // let ib_mem = device.allocate_memory(&alloc_info, None).unwrap();
+    // device.bind_buffer_memory(ib, ib_mem, 0);
+
+    // let info = vk::CommandBufferAllocateInfoBuilder::new()
+    //     .command_pool(command_pool)
+    //     .level(vk::CommandBufferLevel::PRIMARY)
+    //     .command_buffer_count(1);
+    // let cb = device.allocate_command_buffers(&info).unwrap()[0];
+    // let info =  vk::CommandBufferBeginInfoBuilder::new()
+    //     .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+    // device.begin_command_buffer(cb, &info).expect("Failed begin_command_buffer.");
+    // let info =  vk::BufferCopyBuilder::new()
+    //     .src_offset(0)
+    //     .dst_offset(0)
+    //     .size(ib_size);
+    // device.cmd_copy_buffer(cb, sb, ib, &[info]);
+    // let slice = &[cb];
+    // device.end_command_buffer(cb).expect("Failed to end command buffer.");
+    // let info = vk::SubmitInfoBuilder::new()
+    //     .wait_semaphores(&[])
+    //     .command_buffers(slice)
+    //     .signal_semaphores(&[]);
+    // device.queue_submit(queue, &[info], vk::Fence::null()).expect("Failed to queue submit.");
