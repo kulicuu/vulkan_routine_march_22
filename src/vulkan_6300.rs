@@ -1,4 +1,8 @@
-// Vulkan  Scratch   Routine  2400     -----------------   -- --    -- ---- -
+
+#![feature(drain_filter)]
+
+
+
 use erupt::{
     cstr,
     utils::{self, surface},
@@ -109,6 +113,7 @@ unsafe fn routine_pure_procedural
     let window = WindowBuilder::new()
         .with_title(TITLE)
         .with_resizable(false)
+        .with_maximized(true)
         .build(&event_loop)
         .unwrap();
     let entry = Arc::new(EntryLoader::new().unwrap());
@@ -268,85 +273,32 @@ unsafe fn routine_pure_procedural
     let physical_device_memory_properties = instance.get_physical_device_memory_properties(physical_device);
 
 
-
-
-
-    let vb_size = ((::std::mem::size_of_val(&(3.14 as f32))) * 9 * vertices_terr.len()) as vk::DeviceSize;
-    let ib_size = (::std::mem::size_of_val(&(10 as u32)) * indices_terr.len()) as vk::DeviceSize;
     
     let ib = buffer_indices
     (
         &device,
         queue,
         command_pool,
-        &mut vertices_terr, 
         &mut indices_terr,
     ).unwrap();
     
     
-    
+    let vb = buffer_vertices
+    (
+        &device,
+        queue,
+        command_pool,
+        &mut vertices_terr, 
+    ).unwrap();
 
 
 
-
-
-
-    let info = vk::BufferCreateInfoBuilder::new()
-        .size(vb_size)
-        .usage(vk::BufferUsageFlags::TRANSFER_SRC)
-        .sharing_mode(vk::SharingMode::EXCLUSIVE);
-    let sb = device.create_buffer(&info, None).expect("Buffer create fail.");
-    let mem_reqs = device.get_buffer_memory_requirements(sb);
-    let info = vk::MemoryAllocateInfoBuilder::new()
-        .allocation_size(mem_reqs.size)
-        .memory_type_index(2);
-    let sb_mem = device.allocate_memory(&info, None).unwrap();
-    device.bind_buffer_memory(sb, sb_mem, 0).expect("Bind memory fail.");
-    let data_ptr = device.map_memory(
-        sb_mem,
-        0,
-        vk::WHOLE_SIZE,
-        vk::MemoryMapFlags::empty(),
-    ).unwrap() as *mut VertexV3;
-    data_ptr.copy_from_nonoverlapping(vertices_terr.as_ptr(), vertices_terr.len());
-    device.unmap_memory(sb_mem);
-    let info = vk::BufferCreateInfoBuilder::new()
-        .size(vb_size)
-        .usage(vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER)
-        .sharing_mode(vk::SharingMode::EXCLUSIVE);
-    let vb = device.create_buffer(&info, None).expect("Create buffer fail.");
-    let mem_reqs = device.get_buffer_memory_requirements(vb);
-    let info = vk::MemoryAllocateInfoBuilder::new()
-        .allocation_size(mem_reqs.size)
-        .memory_type_index(1);
-    let vb_mem = device.allocate_memory(&info, None).unwrap();
-    device.bind_buffer_memory(vb, vb_mem, 0).expect("Bind memory fail.");
-
-
-    let info = vk::CommandBufferAllocateInfoBuilder::new()
-        .command_pool(command_pool)
-        .level(vk::CommandBufferLevel::PRIMARY)
-        .command_buffer_count(1);
-    let cb = device.allocate_command_buffers(&info).unwrap()[0];
-    let info =  vk::CommandBufferBeginInfoBuilder::new()
-        .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
-    device.begin_command_buffer(cb, &info).expect("Begin command buffer fail.");
-    let info = vk::BufferCopyBuilder::new()
-        .src_offset(0)
-        .dst_offset(0)
-        .size(vb_size);
-
-
-    device.cmd_copy_buffer(cb, sb, vb, &[info]);
-    device.end_command_buffer(cb).expect("End command buffer fail.");
-    let slice = &[cb];
-    let info = vk::SubmitInfoBuilder::new()
-        .wait_semaphores(&[])
-        .command_buffers(slice)
-        .signal_semaphores(&[]);
-    device.queue_submit(queue, &[info], vk::Fence::null()).expect("Queue submit fail.");
     let info = vk::DescriptorSetLayoutBindingFlagsCreateInfoBuilder::new()
         .binding_flags(&[vk::DescriptorBindingFlags::empty()]);
+
+
+
+
     let samplers = [vk::Sampler::null()];
     let binding = vk::DescriptorSetLayoutBindingBuilder::new()
         .binding(0)
@@ -946,7 +898,12 @@ fn load_model
     for i in 0..(indices_terr_full.len() / 2) {
         indices_terr.push(indices_terr_full[i]);
     }
-    Ok((vertices_terr, indices_terr))
+
+    let (mut vertices, mut indices) = terrain_frustrum_culling(vertices_terr.clone(), indices_terr.clone()).unwrap();
+
+
+
+    Ok((vertices, indices))
 }
     // let model_path: &'static str = "assets/terrain__002__.obj";
     // let (models, materials) = tobj::load_obj(&model_path, &tobj::LoadOptions::default()).expect("Failed to load model object!");
@@ -1086,7 +1043,6 @@ unsafe fn buffer_indices
     device: &DeviceLoader,
     queue: vk::Queue,
     command_pool: vk::CommandPool,
-    vertices: &mut Vec<VertexV3>,
     indices: &mut Vec<u32>,
 )
 -> Result<(vk::Buffer), &'a str>
@@ -1145,62 +1101,240 @@ unsafe fn buffer_indices
         .command_buffers(slice)
         .signal_semaphores(&[]);
     device.queue_submit(queue, &[info], vk::Fence::null()).expect("Failed to queue submit.");
-    Ok((ib))
+    Ok(ib)
+}
+
+
+unsafe fn buffer_vertices
+<'a>
+(
+    device: &DeviceLoader,
+    queue: vk::Queue,
+    command_pool: vk::CommandPool,
+    vertices: &mut Vec<VertexV3>,
+)
+-> Result<(vk::Buffer), &'a str>
+{
+    let vb_size = ((::std::mem::size_of_val(&(3.14 as f32))) * 9 * vertices.len()) as vk::DeviceSize;
+    let info = vk::BufferCreateInfoBuilder::new()
+        .size(vb_size)
+        .usage(vk::BufferUsageFlags::TRANSFER_SRC)
+        .sharing_mode(vk::SharingMode::EXCLUSIVE);
+    let sb = device.create_buffer(&info, None).expect("Buffer create fail.");
+    let mem_reqs = device.get_buffer_memory_requirements(sb);
+    let info = vk::MemoryAllocateInfoBuilder::new()
+        .allocation_size(mem_reqs.size)
+        .memory_type_index(2);
+    let sb_mem = device.allocate_memory(&info, None).unwrap();
+    device.bind_buffer_memory(sb, sb_mem, 0).expect("Bind memory fail.");
+    let data_ptr = device.map_memory(
+        sb_mem,
+        0,
+        vk::WHOLE_SIZE,
+        vk::MemoryMapFlags::empty(),
+    ).unwrap() as *mut VertexV3;
+    data_ptr.copy_from_nonoverlapping(vertices.as_ptr(), vertices.len());
+    device.unmap_memory(sb_mem);
+    let info = vk::BufferCreateInfoBuilder::new()
+        .size(vb_size)
+        .usage(vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::VERTEX_BUFFER)
+        .sharing_mode(vk::SharingMode::EXCLUSIVE);
+    let vb = device.create_buffer(&info, None).expect("Create buffer fail.");
+    let mem_reqs = device.get_buffer_memory_requirements(vb);
+    let info = vk::MemoryAllocateInfoBuilder::new()
+        .allocation_size(mem_reqs.size)
+        .memory_type_index(1);
+    let vb_mem = device.allocate_memory(&info, None).unwrap();
+    device.bind_buffer_memory(vb, vb_mem, 0).expect("Bind memory fail.");
+    let info = vk::CommandBufferAllocateInfoBuilder::new()
+        .command_pool(command_pool)
+        .level(vk::CommandBufferLevel::PRIMARY)
+        .command_buffer_count(1);
+    let cb = device.allocate_command_buffers(&info).unwrap()[0];
+    let info =  vk::CommandBufferBeginInfoBuilder::new()
+        .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
+    device.begin_command_buffer(cb, &info).expect("Begin command buffer fail.");
+    let info = vk::BufferCopyBuilder::new()
+        .src_offset(0)
+        .dst_offset(0)
+        .size(vb_size);
+    device.cmd_copy_buffer(cb, sb, vb, &[info]);
+    device.end_command_buffer(cb).expect("End command buffer fail.");
+    let slice = &[cb];
+    let info = vk::SubmitInfoBuilder::new()
+        .wait_semaphores(&[])
+        .command_buffers(slice)
+        .signal_semaphores(&[]);
+    device.queue_submit(queue, &[info], vk::Fence::null()).expect("Queue submit fail.");
+    Ok(vb)
 }
 
 
 
 
-    // let info = vk::BufferCreateInfoBuilder::new()
-    //     .size(ib_size)
-    //     .usage(vk::BufferUsageFlags::TRANSFER_SRC)
-    //     .sharing_mode(vk::SharingMode::EXCLUSIVE);
-    // let sb = device.create_buffer(&info, None).expect("Failed to create a staging buffer.");
-    // let mem_reqs = device.get_buffer_memory_requirements(sb);
-    // let info = vk::MemoryAllocateInfoBuilder::new()
-    //     .allocation_size(mem_reqs.size)
-    //     .memory_type_index(2);
-    // let sb_mem = device.allocate_memory(&info, None).unwrap();
-    // device.bind_buffer_memory(sb, sb_mem, 0).unwrap();
-    // let data_ptr = device.map_memory(
-    //     sb_mem,
-    //     0,
-    //     vk::WHOLE_SIZE,
-    //     vk::MemoryMapFlags::empty(),
-    // ).unwrap() as *mut u32;
-    // data_ptr.copy_from_nonoverlapping(indices_terr.as_ptr(), indices_terr.len());
-    // device.unmap_memory(sb_mem);
-    // // Todo: add destruction if this is still working
-    // let info = vk::BufferCreateInfoBuilder::new()
-    //     .size(ib_size)
-    //     .usage(vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER)
-    //     .sharing_mode(vk::SharingMode::EXCLUSIVE);
-    // let ib = device.create_buffer(&info, None)
-    //     .expect("Failed to create index buffer.");
-    // let mem_reqs = device.get_buffer_memory_requirements(ib);
-    // let alloc_info = vk::MemoryAllocateInfoBuilder::new()
-    //     .allocation_size(mem_reqs.size)
-    //     .memory_type_index(1);
-    // let ib_mem = device.allocate_memory(&alloc_info, None).unwrap();
-    // device.bind_buffer_memory(ib, ib_mem, 0);
 
-    // let info = vk::CommandBufferAllocateInfoBuilder::new()
-    //     .command_pool(command_pool)
-    //     .level(vk::CommandBufferLevel::PRIMARY)
-    //     .command_buffer_count(1);
-    // let cb = device.allocate_command_buffers(&info).unwrap()[0];
-    // let info =  vk::CommandBufferBeginInfoBuilder::new()
-    //     .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
-    // device.begin_command_buffer(cb, &info).expect("Failed begin_command_buffer.");
-    // let info =  vk::BufferCopyBuilder::new()
-    //     .src_offset(0)
-    //     .dst_offset(0)
-    //     .size(ib_size);
-    // device.cmd_copy_buffer(cb, sb, ib, &[info]);
-    // let slice = &[cb];
-    // device.end_command_buffer(cb).expect("Failed to end command buffer.");
-    // let info = vk::SubmitInfoBuilder::new()
-    //     .wait_semaphores(&[])
-    //     .command_buffers(slice)
-    //     .signal_semaphores(&[]);
-    // device.queue_submit(queue, &[info], vk::Fence::null()).expect("Failed to queue submit.");
+fn terrain_frustrum_culling
+<'a>
+(
+    mut vertices: Vec<VertexV3>,
+    mut indices: Vec<u32>,
+)
+-> Result<(Vec<VertexV3>, Vec<u32>), &'a str>
+{
+
+    let stub_v = vertices.clone();
+    let stub_i = indices.clone();
+    // Do one pass through the vertices, to determine the largest value, to scale against.
+
+
+    let mut max: f32 = 0.0;
+    for i in 0..(vertices.len() - 1) {
+        if vertices[i].pos[0] > max {
+            max = vertices[i].pos[0];
+        }
+    }
+    println!("\n\nmax {:?}\n\n", max);
+
+    let cull_val = 0.2 * max;
+
+    let mut indices_acc: Vec<u32> = vec![];
+
+
+    println!("\n\n Before {:?} \n\n", indices.len());
+    let indices = drain_cursive(indices, &vertices, cull_val);
+    println!("\n\n After {:?} \n\n", indices.len());
+
+
+
+
+
+
+    Ok((stub_v, stub_i))
+
+}
+
+
+fn drain_cursive
+(
+    mut indices: Vec<u32>,
+    vertices: &Vec<VertexV3>, 
+    max: f32,
+)
+-> Vec<u32>
+{
+
+    let mut cont: bool = true;
+    while (cont == true) {
+        let (cont, start_idx) = find_first_breaker(&indices, vertices, max);
+        if cont {
+            indices.drain(start_idx..(start_idx + 2 as usize));
+        }
+    }
+    indices
+}
+
+
+fn find_first_breaker
+(
+    indices: &Vec<u32>,
+    vertices: &Vec<VertexV3>,
+    max: f32,
+)
+-> (bool, usize)
+{
+    let cap = indices.len() / 3;
+    let mut mutated: bool = false;
+    let mut start_idx: usize = 0;
+    for j in 0..cap {
+        let base = j * 3;
+        let one = base as usize;
+        let two = (base + 1) as usize;
+        let three = (base + 2) as usize;
+        if (vertices[indices[one] as usize].pos[0] > max) || (vertices[indices[two] as usize].pos[1] > max) || (vertices[indices[three] as usize].pos[2] > max) 
+        || (vertices[indices[(base + 1) as usize] as usize].pos[0] > max) || (vertices[indices[(base + 1) as usize] as usize].pos[1] > max) || (vertices[indices[(base + 1) as usize] as usize].pos[2] > max)
+        || (vertices[indices[(base + 2) as usize] as usize].pos[0] > max) || (vertices[indices[(base + 2) as usize] as usize].pos[1] > max) || (vertices[indices[(base + 2) as usize] as usize].pos[2] > max)
+        {
+            mutated = true;
+            start_idx = base;
+            break;
+        }
+    }
+    (mutated, start_idx)
+}
+
+
+// fn drain_cursive
+// <'a>
+// (
+//     vertices: &Vec<VertexV3>,
+//     indices: mut Vec<u32>,
+//     max: f32,
+// )
+// -> &'a mut Vec<u32>
+// {
+//     let cap = indices.len() /3;
+//     for j in 0..cap {
+//         if (vertices[indices[base as usize]].pos[0] > max) || (vertices[indices[base as usize]].pos[1] > max) || (vertices[indices[base as usize]].pos[2] > max) 
+//         || (vertices[indices[base + 1 as usize]].pos[0] > max) || (vertices[indices[base + 1 as usize]].pos[1] > max) || (vertices[indices[base + 1 as usize]].pos[2] > max)
+//         || (vertices[indices[base + 2 as usize]].pos[0] > max) || (vertices[indices[base + 2 as usize]].pos[1] > max) || (vertices[indices[base + 2 as usize]].pos[2] > max)
+//         {
+//             indices.drain(0..2);            
+//             // indices = drain_cursive(indices, max);
+//             // break;
+//         }
+
+        
+//     }
+
+//     indices
+
+
+
+
+// }
+
+
+
+
+
+
+
+
+
+
+
+
+// println!("\n\n Length of starting vertices vector: {:?}, and length of starting indices vector {:?}", vertices.len(), indices.len());
+
+// // vertices.drain_filter(|x| (x.pos[0] < cull_val) && (x.pos[1] < cull_val) && (x.pos[2] < cull_val))
+// // let ic = vertices.len() - 1;
+
+// // for i in 0..vertices.len() {
+// //     if (vertices[i].pos[0] > cull_val) || (vertices[i].pos[1] > cull_val) || (vertices[i].pos[2] > cull_val) {
+// //     // if (vertices[i].pos[0] > cull_val) || (vertices[i].pos[1] > cull_val) {
+// //         indices_acc.push(i as u32);
+// //     }
+// // }
+
+// // let vertices_culled = vertices.drain_filter(|x| (x.pos[0] < cull_val) && (x.pos[1] < cull_val) && (x.pos[2] < cull_val)).collect::<Vec<_>>();
+// // let indices_culled = indices.drain_filter(|idx| indices_acc.contains(idx)).collect::<Vec<_>>();
+// println!("\n\n Length of modified vertices vector: {:?}, and length of modified indices vector {:?}", vertices_culled.len(), indices_culled.len());
+
+
+
+
+
+// This won't do, because it messes up the ordering of the triangles, by indices.  We need to throw out all vertices that are part of triangles where any vertex exceeds 
+// cull_val.  but if it's part of another triangle it may not be removed.  
+
+
+// So maybe really we should be going through the indices vector by threes, if any of the three indices represents a vertex beyond the pale,
+// we remove all three indices from the indices vector.  Interesting.  
+// Then after this we can do the standard pass on the vertices.
+
+
+// let mut indices_culled: Vec<u32> = vec![];
+
+
+
+// indices = drain_cursive(&vertices, indices.clone(), max)
