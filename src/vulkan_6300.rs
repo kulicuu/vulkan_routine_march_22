@@ -56,7 +56,7 @@ struct FrameData {
 }
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-struct VertexV3 {
+pub struct VertexV3 {
     pos: [f32; 4],
     color: [f32; 4],
 }
@@ -868,7 +868,7 @@ unsafe fn create_buffer
 
 
 
-fn load_model
+pub fn load_model
 <'a>
 () 
 -> Result<(Vec<VertexV3>, Vec<u32>), &'a str> 
@@ -898,34 +898,9 @@ fn load_model
     for i in 0..(indices_terr_full.len() / 2) {
         indices_terr.push(indices_terr_full[i]);
     }
-
-    let (mut vertices, mut indices) = terrain_frustrum_culling(vertices_terr.clone(), indices_terr.clone()).unwrap();
-
-
-
-    Ok((vertices, indices))
+    let mut indices = terrain_frustrum_culling(&vertices_terr, indices_terr.clone()).unwrap();
+    Ok((vertices_terr, indices))
 }
-    // let model_path: &'static str = "assets/terrain__002__.obj";
-    // let (models, materials) = tobj::load_obj(&model_path, &tobj::LoadOptions::default()).expect("Failed to load model object!");
-    // let model = models[0].clone();
-    // let materials = materials.unwrap();
-    // let material = materials.clone().into_iter().nth(0).unwrap();
-    // let mut vertices_terr = vec![];
-    // let mesh = model.mesh;
-    // let total_vertices_count = mesh.positions.len() / 3;
-    // for i in 0..total_vertices_count {
-    //     let vertex = VertexV3 {
-    //         pos: [
-    //             mesh.positions[i * 3],
-    //             mesh.positions[i * 3 + 1],
-    //             mesh.positions[i * 3 + 2],
-    //             1.0,
-    //         ],
-    //         color: [0.8, 0.20, 0.30, 0.40],
-    //     };
-    //     vertices_terr.push(vertex);
-    // };
-    // let mut indices_terr = mesh.indices.clone();
 
 
 
@@ -1170,171 +1145,53 @@ unsafe fn buffer_vertices
 }
 
 
-
-
-
 fn terrain_frustrum_culling
 <'a>
 (
-    mut vertices: Vec<VertexV3>,
+    vertices: &Vec<VertexV3>,
     mut indices: Vec<u32>,
 )
--> Result<(Vec<VertexV3>, Vec<u32>), &'a str>
+-> Result<Vec<u32>, &'a str>
 {
-
-    let stub_v = vertices.clone();
-    let stub_i = indices.clone();
-    // Do one pass through the vertices, to determine the largest value, to scale against.
-
-
-    let mut max: f32 = 0.0;
-    for i in 0..(vertices.len() - 1) {
-        if vertices[i].pos[0] > max {
-            max = vertices[i].pos[0];
+    let max = 0.3;  // max value in the terrain mesh is 1.0 so we scale easily.
+    let mut exist_bad_tri = true;
+    while exist_bad_tri {
+        let base: i32 = find_bad_tri(&indices, &vertices, max);
+        if base == -1 {
+            exist_bad_tri = false;
+        } else {
+            let start = base as usize;
+            let end = (base + 3) as usize; 
+            let check: Vec<_> = indices.drain(start..end).collect();
         }
     }
-    println!("\n\nmax {:?}\n\n", max);
-
-    let cull_val = 0.2 * max;
-
-    let mut indices_acc: Vec<u32> = vec![];
-
-
-    println!("\n\n Before {:?} \n\n", indices.len());
-    let indices = drain_cursive(indices, &vertices, cull_val);
-    println!("\n\n After {:?} \n\n", indices.len());
-
-
-
-
-
-
-    Ok((stub_v, stub_i))
-
+    Ok(indices)
 }
 
 
-fn drain_cursive
-(
-    mut indices: Vec<u32>,
-    vertices: &Vec<VertexV3>, 
-    max: f32,
-)
--> Vec<u32>
-{
-
-    let mut cont: bool = true;
-    while (cont == true) {
-        let (cont, start_idx) = find_first_breaker(&indices, vertices, max);
-        if cont {
-            indices.drain(start_idx..(start_idx + 2 as usize));
-        }
-    }
-    indices
-}
-
-
-fn find_first_breaker
+fn find_bad_tri
 (
     indices: &Vec<u32>,
     vertices: &Vec<VertexV3>,
     max: f32,
 )
--> (bool, usize)
+-> i32
 {
-    let cap = indices.len() / 3;
-    let mut mutated: bool = false;
-    let mut start_idx: usize = 0;
-    for j in 0..cap {
-        let base = j * 3;
-        let one = base as usize;
-        let two = (base + 1) as usize;
-        let three = (base + 2) as usize;
-        if (vertices[indices[one] as usize].pos[0] > max) || (vertices[indices[two] as usize].pos[1] > max) || (vertices[indices[three] as usize].pos[2] > max) 
+    let cap = (indices.len() / 3) as i32;
+    let mut base: i32 = 0;
+    let mut found : bool = false;
+    while !found && base < cap {
+        if (vertices[indices[base as usize] as usize].pos[0] > max) || (vertices[indices[base as usize] as usize].pos[1] > max) || (vertices[indices[base as usize] as usize].pos[2] > max) 
         || (vertices[indices[(base + 1) as usize] as usize].pos[0] > max) || (vertices[indices[(base + 1) as usize] as usize].pos[1] > max) || (vertices[indices[(base + 1) as usize] as usize].pos[2] > max)
         || (vertices[indices[(base + 2) as usize] as usize].pos[0] > max) || (vertices[indices[(base + 2) as usize] as usize].pos[1] > max) || (vertices[indices[(base + 2) as usize] as usize].pos[2] > max)
         {
-            mutated = true;
-            start_idx = base;
-            break;
+            found = true;
+            return base
+        } else {
+            base += 3;
         }
     }
-    (mutated, start_idx)
+    -1
 }
 
 
-// fn drain_cursive
-// <'a>
-// (
-//     vertices: &Vec<VertexV3>,
-//     indices: mut Vec<u32>,
-//     max: f32,
-// )
-// -> &'a mut Vec<u32>
-// {
-//     let cap = indices.len() /3;
-//     for j in 0..cap {
-//         if (vertices[indices[base as usize]].pos[0] > max) || (vertices[indices[base as usize]].pos[1] > max) || (vertices[indices[base as usize]].pos[2] > max) 
-//         || (vertices[indices[base + 1 as usize]].pos[0] > max) || (vertices[indices[base + 1 as usize]].pos[1] > max) || (vertices[indices[base + 1 as usize]].pos[2] > max)
-//         || (vertices[indices[base + 2 as usize]].pos[0] > max) || (vertices[indices[base + 2 as usize]].pos[1] > max) || (vertices[indices[base + 2 as usize]].pos[2] > max)
-//         {
-//             indices.drain(0..2);            
-//             // indices = drain_cursive(indices, max);
-//             // break;
-//         }
-
-        
-//     }
-
-//     indices
-
-
-
-
-// }
-
-
-
-
-
-
-
-
-
-
-
-
-// println!("\n\n Length of starting vertices vector: {:?}, and length of starting indices vector {:?}", vertices.len(), indices.len());
-
-// // vertices.drain_filter(|x| (x.pos[0] < cull_val) && (x.pos[1] < cull_val) && (x.pos[2] < cull_val))
-// // let ic = vertices.len() - 1;
-
-// // for i in 0..vertices.len() {
-// //     if (vertices[i].pos[0] > cull_val) || (vertices[i].pos[1] > cull_val) || (vertices[i].pos[2] > cull_val) {
-// //     // if (vertices[i].pos[0] > cull_val) || (vertices[i].pos[1] > cull_val) {
-// //         indices_acc.push(i as u32);
-// //     }
-// // }
-
-// // let vertices_culled = vertices.drain_filter(|x| (x.pos[0] < cull_val) && (x.pos[1] < cull_val) && (x.pos[2] < cull_val)).collect::<Vec<_>>();
-// // let indices_culled = indices.drain_filter(|idx| indices_acc.contains(idx)).collect::<Vec<_>>();
-// println!("\n\n Length of modified vertices vector: {:?}, and length of modified indices vector {:?}", vertices_culled.len(), indices_culled.len());
-
-
-
-
-
-// This won't do, because it messes up the ordering of the triangles, by indices.  We need to throw out all vertices that are part of triangles where any vertex exceeds 
-// cull_val.  but if it's part of another triangle it may not be removed.  
-
-
-// So maybe really we should be going through the indices vector by threes, if any of the three indices represents a vertex beyond the pale,
-// we remove all three indices from the indices vector.  Interesting.  
-// Then after this we can do the standard pass on the vertices.
-
-
-// let mut indices_culled: Vec<u32> = vec![];
-
-
-
-// indices = drain_cursive(&vertices, indices.clone(), max)
