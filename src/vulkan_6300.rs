@@ -1153,7 +1153,7 @@ fn terrain_frustrum_culling
 )
 -> Result<Vec<u32>, &'a str>
 {
-    let max = 0.3;  // max value in the terrain mesh is 1.0 so we scale easily.
+    let max = 0.5;  // max value in the terrain mesh is 1.0 so we scale easily.
     let mut exist_bad_tri = true;
     while exist_bad_tri {
         let base: i32 = find_bad_tri(&indices, &vertices, max);
@@ -1169,6 +1169,13 @@ fn terrain_frustrum_culling
 }
 
 
+
+
+
+
+
+
+
 fn find_bad_tri
 (
     indices: &Vec<u32>,
@@ -1180,10 +1187,14 @@ fn find_bad_tri
     let cap = (indices.len() / 3) as i32;
     let mut base: i32 = 0;
     let mut found : bool = false;
+
+    let x_max = 0.85;
+    let y_max = 0.85;
+    let z_max = 0.85;
     while !found && base < cap {
-        if (vertices[indices[base as usize] as usize].pos[0] > max) || (vertices[indices[base as usize] as usize].pos[1] > max) || (vertices[indices[base as usize] as usize].pos[2] > max) 
-        || (vertices[indices[(base + 1) as usize] as usize].pos[0] > max) || (vertices[indices[(base + 1) as usize] as usize].pos[1] > max) || (vertices[indices[(base + 1) as usize] as usize].pos[2] > max)
-        || (vertices[indices[(base + 2) as usize] as usize].pos[0] > max) || (vertices[indices[(base + 2) as usize] as usize].pos[1] > max) || (vertices[indices[(base + 2) as usize] as usize].pos[2] > max)
+        if (vertices[indices[base as usize] as usize].pos[0].abs() > x_max) || (vertices[indices[base as usize] as usize].pos[1].abs() > y_max) || (vertices[indices[base as usize] as usize].pos[2].abs() > z_max) 
+        || (vertices[indices[(base + 1) as usize] as usize].pos[0].abs() > x_max) || (vertices[indices[(base + 1) as usize] as usize].pos[1].abs() > y_max) || (vertices[indices[(base + 1) as usize] as usize].pos[2].abs() > z_max)
+        || (vertices[indices[(base + 2) as usize] as usize].pos[0].abs() > x_max) || (vertices[indices[(base + 2) as usize] as usize].pos[1].abs() > y_max) || (vertices[indices[(base + 2) as usize] as usize].pos[2].abs() > z_max)
         {
             found = true;
             return base
