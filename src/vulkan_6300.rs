@@ -10,6 +10,7 @@ use erupt::{
     vk::{Device, MemoryMapFlags},
 };
 use cgmath::{Deg, Rad, Matrix4, Point3, Vector3, Vector4};
+use nalgebra_glm as glm;
 use std::{
     ffi::{c_void, CStr, CString},
     fs,
@@ -25,6 +26,10 @@ use std::{
     thread,
     time,
 };
+
+use std::time::{Duration, Instant};
+use std::thread::sleep;
+
 use smallvec::SmallVec;
 use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 use memoffset::offset_of;
@@ -41,7 +46,7 @@ use winit::{
     window::Window
 };
 use structopt::StructOpt;
-const TITLE: &str = "vulkan-routine-2400";
+const TITLE: &str = "vulkan-routine";
 const FRAMES_IN_FLIGHT: usize = 2;
 const LAYER_KHRONOS_VALIDATION: *const c_char = cstr!("VK_LAYER_KHRONOS_validation");
 const SHADER_VERT: &[u8] = include_bytes!("../spv/s_300__.vert.spv");
@@ -65,7 +70,7 @@ pub struct VertexV3 {
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 struct PushConstants {
-    view: Matrix4<f32>,
+    view: glm::Mat4,
 }
 
 
@@ -358,6 +363,25 @@ unsafe fn routine_pure_procedural
         },
     };
 
+
+    let view: glm::Mat4 = glm::look_at_rh
+    (
+        &glm::vec3(0.80, 0.80, 0.80),
+        &glm::vec3(0.0, 0.0, 0.0),
+        &glm::vec3(0.0, 0.0, 1.0),
+    );
+
+    let mut push_constant = PushConstants {
+        view: view,
+    };
+
+    // let mut push_constant = PushConstants {
+    //     view: glm::Matrix4::look_at_rh(
+    //         Point3::new(0.80, 0.80, 0.80),
+    //         Point3::new(0.0, 0.0, 0.0),
+    //         Vector3::new(0.0, 0.0, 1.0),
+    // };
+
     let pool_size = vk::DescriptorPoolSizeBuilder::new()
         ._type(vk::DescriptorType::UNIFORM_BUFFER)
         .descriptor_count(swapchain_image_count as u32);
@@ -558,13 +582,14 @@ unsafe fn routine_pure_procedural
     let push_constant_range = vk::PushConstantRangeBuilder::new()
         .stage_flags(vk::ShaderStageFlags::VERTEX)
         .offset(0)
-        .size(std::mem::size_of::<PushConstants>());
+        .size(std::mem::size_of::<PushConstants>() as u32);
+    let slice = [push_constant_range];
 
     
 
     let pipeline_layout_info = vk::PipelineLayoutCreateInfoBuilder::new()
         .set_layouts(desc_layouts_slc)
-        .push_constant_ranges(&[push_constant_range]);
+        .push_constant_ranges(&slice);
 
 
     let pipeline_layout = device.create_pipeline_layout(&pipeline_layout_info, None).unwrap();
@@ -651,48 +676,13 @@ unsafe fn routine_pure_procedural
         .command_buffer_count(swapchain_framebuffers.len() as _);
     let cmd_bufs = device.allocate_command_buffers(&cmd_buf_allocate_info).unwrap();
 
-    // This is the bare bones pre-recording of command-buffers.  We want to re-record on every frame, then with secondary command-buffers,
-    // for multi-threaded rendering.  We also need to add in the push constants injection.
 
-    // for (&cmd_buf, &framebuffer) in cmd_bufs.iter().zip(swapchain_framebuffers.iter()) {
-    //     let cmd_buf_begin_info = vk::CommandBufferBeginInfoBuilder::new();
-    //     device.begin_command_buffer(cmd_buf, &cmd_buf_begin_info).unwrap();
-    //     let clear_values = vec![
-    //         vk::ClearValue {
-    //             color: vk::ClearColorValue {
-    //                 float32: [0.0, 0.0, 0.0, 1.0],
-    //             },
-    //         },
-    //         vk::ClearValue {
-    //             depth_stencil: vk::ClearDepthStencilValue {
-    //                 depth: 1.0,
-    //                 stencil: 0,
-    //             },
-    //         },
-    //     ];
-    //     let render_pass_begin_info = vk::RenderPassBeginInfoBuilder::new()
-    //         .render_pass(render_pass)
-    //         .framebuffer(framebuffer)
-    //         .render_area(vk::Rect2D {
-    //             offset: vk::Offset2D { x: 0, y: 0 },
-    //             extent: swapchain_image_extent,
-    //         })
-    //         .clear_values(&clear_values);
-        
-    //     device.cmd_begin_render_pass(
-    //         cmd_buf,
-    //         &render_pass_begin_info,
-    //         vk::SubpassContents::INLINE,
-    //     );
-    //     device.cmd_bind_pipeline(cmd_buf, vk::PipelineBindPoint::GRAPHICS, pipeline);
-    //     device.cmd_bind_index_buffer(cmd_buf, ib, 0, vk::IndexType::UINT32);
-    //     device.cmd_bind_vertex_buffers(cmd_buf, 0, &[vb], &[0]);
-    //     device.cmd_bind_descriptor_sets(cmd_buf, vk::PipelineBindPoint::GRAPHICS, pipeline_layout, 0, &d_sets, &[]);
-    //     device.cmd_draw_indexed(cmd_buf, (indices_terr.len()) as u32, ((indices_terr.len()) / 3) as u32, 0, 0, 0);
-    //     device.cmd_end_render_pass(cmd_buf);
-    //     device.end_command_buffer(cmd_buf).unwrap();
-        
-    // }
+
+
+    let now = Instant::now();
+
+
+
 
 
 
@@ -741,7 +731,18 @@ unsafe fn routine_pure_procedural
                 image_available_semaphores[frame],
                 vk::Fence::null(),
             ).unwrap();
+
+
+            let delta_time = now.elapsed().as_secs_f32();
+
+            update_push_constants(&mut push_constant, delta_time);
+
             update_uniform_buffer(&device, &mut uniform_transform, &mut uniform_buffers_memories, &mut uniform_buffers, image_index as usize, 3.2);
+
+
+
+
+
             let image_in_flight = images_in_flight[image_index as usize];
             if !image_in_flight.is_null() {
                 device.wait_for_fences(&[image_in_flight], true, u64::MAX).unwrap();
@@ -752,6 +753,7 @@ unsafe fn routine_pure_procedural
 
             let command_buffer = cmd_bufs[image_index as usize];
             let framebuffer = swapchain_framebuffers[image_index as usize];
+
 
             record_cb_111
             (
@@ -766,6 +768,7 @@ unsafe fn routine_pure_procedural
                 d_sets.clone(),
                 vb,
                 ib,
+                push_constant,
             );
             let command_buffers = [command_buffer];
             let signal_semaphores = vec![render_finished_semaphores[frame]];
@@ -828,16 +831,34 @@ unsafe fn routine_pure_procedural
 }
 
 
+unsafe fn update_push_constants
+(
+    push_constant: &mut PushConstants,
+    delta_time: f32,
+)
+{
+    let view = glm::rotate
+    (
+        &push_constant.view,
+        delta_time * 4.0,
+        &glm::vec3(1.0, 0.0, 0.0),
+
+    );
+
+    push_constant.view = view;
+    // push_constant.view = Matrix4::from_axis_angle(Vector3::new(0.2, 1.0, 0.0), Deg(0.110) * delta_time) * push_constant.view;
+
+}
 
 
-
-unsafe fn update_uniform_buffer(
+unsafe fn update_uniform_buffer
+(
     device: &DeviceLoader,
     uniform_transform: &mut UniformBufferObject,
     ubo_mems: &mut Vec<vk::DeviceMemory>,
     ubos: &mut Vec<vk::Buffer>,
     current_image: usize,
-    delta_time: f32
+    delta_time: f32,
 )
 {
     uniform_transform.model =
@@ -1237,6 +1258,7 @@ unsafe fn record_cb_111
     d_sets: erupt::SmallVec<vk::DescriptorSet>,
     vb: vk::Buffer,
     ib: vk::Buffer,
+    push_constant: PushConstants,
 )
 -> Result<(), &'a str>
 {
@@ -1273,6 +1295,29 @@ unsafe fn record_cb_111
     device.cmd_bind_index_buffer(command_buffer, ib, 0, vk::IndexType::UINT32);
     device.cmd_bind_vertex_buffers(command_buffer, 0, &[vb], &[0]);
     device.cmd_bind_descriptor_sets(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline_layout, 0, &d_sets, &[]);
+
+
+    // let (_, view_b, _) = push_constant.view.as_slice().align_to::<u8>();
+    // let view_bytes = view_b.as_ptr();
+
+    // let ptr = &*view_b as *const c_void;
+
+
+
+    let ptr = std::ptr::addr_of!(push_constant.view) as *const c_void;
+
+    device.cmd_push_constants
+    (
+        command_buffer,
+        pipeline_layout,
+        vk::ShaderStageFlags::VERTEX,
+        0,
+        std::mem::size_of::<PushConstants>() as u32,
+        ptr,
+    );
+
+
+
     device.cmd_draw_indexed(command_buffer, (indices_terr.len()) as u32, ((indices_terr.len()) / 3) as u32, 0, 0, 0);
     device.cmd_end_render_pass(command_buffer);
     device.end_command_buffer(command_buffer).unwrap();
