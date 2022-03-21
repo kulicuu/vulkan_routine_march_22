@@ -180,9 +180,6 @@ unsafe fn routine_pure_procedural
         surface.clone(),
     ).unwrap();
 
-
-
-
     println!("\n\n\nUsing physical device: {:?}\n\n\n", CStr::from_ptr(device_properties.device_name.as_ptr()));
 
 
@@ -308,7 +305,7 @@ unsafe fn routine_pure_procedural
         .immutable_samplers(&samplers);
     let slice = &[binding];
     let info = vk::DescriptorSetLayoutCreateInfoBuilder::new()
-        .flags(vk::DescriptorSetLayoutCreateFlags::empty()) // ?  https://docs.rs/erupt/0.22.0+204/erupt/vk1_0/struct.DescriptorSetLayoutCreateFlags.html
+        .flags(vk::DescriptorSetLayoutCreateFlags::empty()) 
         .bindings(slice);
     let descriptor_set_layout = device.create_descriptor_set_layout(&info, None).unwrap();
 
@@ -634,7 +631,7 @@ unsafe fn routine_pure_procedural
 
     
     
-        let cmd_buf_allocate_info = vk::CommandBufferAllocateInfoBuilder::new()
+    let cmd_buf_allocate_info = vk::CommandBufferAllocateInfoBuilder::new()
         .command_pool(command_pool)
         .level(vk::CommandBufferLevel::PRIMARY)
         .command_buffer_count(swapchain_framebuffers.len() as _);
@@ -644,45 +641,50 @@ unsafe fn routine_pure_procedural
 
 
 
-    for (&cmd_buf, &framebuffer) in cmd_bufs.iter().zip(swapchain_framebuffers.iter()) {
-        let cmd_buf_begin_info = vk::CommandBufferBeginInfoBuilder::new();
-        device.begin_command_buffer(cmd_buf, &cmd_buf_begin_info).unwrap();
-        let clear_values = vec![
-            vk::ClearValue {
-                color: vk::ClearColorValue {
-                    float32: [0.0, 0.0, 0.0, 1.0],
-                },
-            },
-            vk::ClearValue {
-                depth_stencil: vk::ClearDepthStencilValue {
-                    depth: 1.0,
-                    stencil: 0,
-                },
-            },
-        ];
-        let render_pass_begin_info = vk::RenderPassBeginInfoBuilder::new()
-            .render_pass(render_pass)
-            .framebuffer(framebuffer)
-            .render_area(vk::Rect2D {
-                offset: vk::Offset2D { x: 0, y: 0 },
-                extent: swapchain_image_extent,
-            })
-            .clear_values(&clear_values);
+
+
+    // This is the bare bones pre-recording of command-buffers.  We want to re-record on every frame, then with secondary command-buffers,
+    // for multi-threaded rendering.  We also need to add in the push constants injection.
+
+    // for (&cmd_buf, &framebuffer) in cmd_bufs.iter().zip(swapchain_framebuffers.iter()) {
+    //     let cmd_buf_begin_info = vk::CommandBufferBeginInfoBuilder::new();
+    //     device.begin_command_buffer(cmd_buf, &cmd_buf_begin_info).unwrap();
+    //     let clear_values = vec![
+    //         vk::ClearValue {
+    //             color: vk::ClearColorValue {
+    //                 float32: [0.0, 0.0, 0.0, 1.0],
+    //             },
+    //         },
+    //         vk::ClearValue {
+    //             depth_stencil: vk::ClearDepthStencilValue {
+    //                 depth: 1.0,
+    //                 stencil: 0,
+    //             },
+    //         },
+    //     ];
+    //     let render_pass_begin_info = vk::RenderPassBeginInfoBuilder::new()
+    //         .render_pass(render_pass)
+    //         .framebuffer(framebuffer)
+    //         .render_area(vk::Rect2D {
+    //             offset: vk::Offset2D { x: 0, y: 0 },
+    //             extent: swapchain_image_extent,
+    //         })
+    //         .clear_values(&clear_values);
         
-        device.cmd_begin_render_pass(
-            cmd_buf,
-            &render_pass_begin_info,
-            vk::SubpassContents::INLINE,
-        );
-        device.cmd_bind_pipeline(cmd_buf, vk::PipelineBindPoint::GRAPHICS, pipeline);
-        device.cmd_bind_index_buffer(cmd_buf, ib, 0, vk::IndexType::UINT32);
-        device.cmd_bind_vertex_buffers(cmd_buf, 0, &[vb], &[0]);
-        device.cmd_bind_descriptor_sets(cmd_buf, vk::PipelineBindPoint::GRAPHICS, pipeline_layout, 0, &d_sets, &[]);
-        device.cmd_draw_indexed(cmd_buf, (indices_terr.len()) as u32, ((indices_terr.len()) / 3) as u32, 0, 0, 0);
-        device.cmd_end_render_pass(cmd_buf);
-        device.end_command_buffer(cmd_buf).unwrap();
+    //     device.cmd_begin_render_pass(
+    //         cmd_buf,
+    //         &render_pass_begin_info,
+    //         vk::SubpassContents::INLINE,
+    //     );
+    //     device.cmd_bind_pipeline(cmd_buf, vk::PipelineBindPoint::GRAPHICS, pipeline);
+    //     device.cmd_bind_index_buffer(cmd_buf, ib, 0, vk::IndexType::UINT32);
+    //     device.cmd_bind_vertex_buffers(cmd_buf, 0, &[vb], &[0]);
+    //     device.cmd_bind_descriptor_sets(cmd_buf, vk::PipelineBindPoint::GRAPHICS, pipeline_layout, 0, &d_sets, &[]);
+    //     device.cmd_draw_indexed(cmd_buf, (indices_terr.len()) as u32, ((indices_terr.len()) / 3) as u32, 0, 0, 0);
+    //     device.cmd_end_render_pass(cmd_buf);
+    //     device.end_command_buffer(cmd_buf).unwrap();
         
-    }
+    // }
 
 
 
@@ -741,7 +743,40 @@ unsafe fn routine_pure_procedural
             }
             images_in_flight[image_index as usize] = in_flight_fences[frame];
             let wait_semaphores = vec![image_available_semaphores[frame]];
-            let command_buffers = vec![cmd_bufs[image_index as usize]];
+
+
+
+
+
+
+
+
+            // let command_buffers = vec![cmd_bufs[image_index as usize]];
+
+            let command_buffer = cmd_bufs[image_index as usize];
+            let framebuffer = swapchain_framebuffers[image_index as usize];
+
+
+            record_cb_111
+            (
+                command_buffer,
+                &device,
+                render_pass,
+                framebuffer,
+                swapchain_image_extent,
+                pipeline,
+                pipeline_layout,
+                &indices_terr,
+                d_sets.clone(),
+                vb,
+                ib,
+            );
+
+
+
+            let command_buffers = [command_buffer];
+
+
             let signal_semaphores = vec![render_finished_semaphores[frame]];
             let submit_info = vk::SubmitInfoBuilder::new()
                 .wait_semaphores(&wait_semaphores)
@@ -1169,13 +1204,6 @@ fn terrain_frustrum_culling
 }
 
 
-
-
-
-
-
-
-
 fn find_bad_tri
 (
     indices: &Vec<u32>,
@@ -1206,3 +1234,60 @@ fn find_bad_tri
 }
 
 
+unsafe fn record_cb_111
+<'a>
+(
+    command_buffer: vk::CommandBuffer,
+    device: &erupt::DeviceLoader,
+    render_pass: vk::RenderPass,
+    framebuffer: vk::Framebuffer,
+    swapchain_image_extent: vk::Extent2D,
+    pipeline: vk::Pipeline,
+    pipeline_layout: vk::PipelineLayout,
+    indices_terr: &Vec<u32>,
+    d_sets: erupt::SmallVec<vk::DescriptorSet>,
+    vb: vk::Buffer,
+    ib: vk::Buffer,
+)
+-> Result<(), &'a str>
+{
+    let cmd_buf_begin_info = vk::CommandBufferBeginInfoBuilder::new();
+    device.begin_command_buffer(command_buffer, &cmd_buf_begin_info).unwrap();
+    let clear_values = vec![
+        vk::ClearValue {
+            color: vk::ClearColorValue {
+                float32: [0.0, 0.0, 0.0, 1.0],
+            },
+        },
+        vk::ClearValue {
+            depth_stencil: vk::ClearDepthStencilValue {
+                depth: 1.0,
+                stencil: 0,
+            },
+        },
+    ];
+    let render_pass_begin_info = vk::RenderPassBeginInfoBuilder::new()
+        .render_pass(render_pass)
+        .framebuffer(framebuffer)
+        .render_area(vk::Rect2D {
+            offset: vk::Offset2D { x: 0, y: 0 },
+            extent: swapchain_image_extent,
+        })
+        .clear_values(&clear_values);
+    
+    device.cmd_begin_render_pass(
+        command_buffer,
+        &render_pass_begin_info,
+        vk::SubpassContents::INLINE,
+    );
+    device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline);
+    device.cmd_bind_index_buffer(command_buffer, ib, 0, vk::IndexType::UINT32);
+    device.cmd_bind_vertex_buffers(command_buffer, 0, &[vb], &[0]);
+    device.cmd_bind_descriptor_sets(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline_layout, 0, &d_sets, &[]);
+    device.cmd_draw_indexed(command_buffer, (indices_terr.len()) as u32, ((indices_terr.len()) / 3) as u32, 0, 0, 0);
+    device.cmd_end_render_pass(command_buffer);
+    device.end_command_buffer(command_buffer).unwrap();
+
+
+    Ok(())
+}
