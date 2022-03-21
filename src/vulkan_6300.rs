@@ -64,11 +64,20 @@ pub struct VertexV3 {
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
+struct PushConstants {
+    view: Matrix4<f32>,
+}
+
+
+#[repr(C)]
+#[derive(Clone, Debug, Copy)]
 struct UniformBufferObject {
     model: Matrix4<f32>,
     view: Matrix4<f32>,
     proj: Matrix4<f32>,
 }
+
+
 #[derive(Debug, StructOpt)]
 struct Opt {
     #[structopt(short, long)]
@@ -544,8 +553,19 @@ unsafe fn routine_pure_procedural
         .back(vk::StencilOpStateBuilder::new().build());
 
     let desc_layouts_slc = &[descriptor_set_layout];
+
+
+    let push_constant_range = vk::PushConstantRangeBuilder::new()
+        .stage_flags(vk::ShaderStageFlags::VERTEX)
+        .offset(0)
+        .size(std::mem::size_of::<PushConstants>());
+
+    
+
     let pipeline_layout_info = vk::PipelineLayoutCreateInfoBuilder::new()
-        .set_layouts(desc_layouts_slc);
+        .set_layouts(desc_layouts_slc)
+        .push_constant_ranges(&[push_constant_range]);
+
 
     let pipeline_layout = device.create_pipeline_layout(&pipeline_layout_info, None).unwrap();
     let attachments = vec![
@@ -621,27 +641,15 @@ unsafe fn routine_pure_procedural
                 .width(swapchain_image_extent.width)
                 .height(swapchain_image_extent.height)
                 .layers(1);
-
             device.create_framebuffer(&framebuffer_info, None).unwrap()
         })
         .collect();
 
-
-
-
-    
-    
     let cmd_buf_allocate_info = vk::CommandBufferAllocateInfoBuilder::new()
         .command_pool(command_pool)
         .level(vk::CommandBufferLevel::PRIMARY)
         .command_buffer_count(swapchain_framebuffers.len() as _);
-
-
     let cmd_bufs = device.allocate_command_buffers(&cmd_buf_allocate_info).unwrap();
-
-
-
-
 
     // This is the bare bones pre-recording of command-buffers.  We want to re-record on every frame, then with secondary command-buffers,
     // for multi-threaded rendering.  We also need to add in the push constants injection.
@@ -702,9 +710,6 @@ unsafe fn routine_pure_procedural
     let mut images_in_flight: Vec<_> = swapchain_images.iter().map(|_| vk::Fence::null()).collect();
     let mut frame = 0;
     
-    
-    
-    
     #[allow(clippy::collapsible_match, clippy::single_match)]
     event_loop.run(move |event, _, control_flow| match event {
         Event::NewEvents(StartCause::Init) => {
@@ -743,19 +748,10 @@ unsafe fn routine_pure_procedural
             }
             images_in_flight[image_index as usize] = in_flight_fences[frame];
             let wait_semaphores = vec![image_available_semaphores[frame]];
-
-
-
-
-
-
-
-
             // let command_buffers = vec![cmd_bufs[image_index as usize]];
 
             let command_buffer = cmd_bufs[image_index as usize];
             let framebuffer = swapchain_framebuffers[image_index as usize];
-
 
             record_cb_111
             (
@@ -771,12 +767,7 @@ unsafe fn routine_pure_procedural
                 vb,
                 ib,
             );
-
-
-
             let command_buffers = [command_buffer];
-
-
             let signal_semaphores = vec![render_finished_semaphores[frame]];
             let submit_info = vk::SubmitInfoBuilder::new()
                 .wait_semaphores(&wait_semaphores)
@@ -789,8 +780,6 @@ unsafe fn routine_pure_procedural
             device
                 .queue_submit(queue, &[submit_info], in_flight_fence)
                 .unwrap();
-
-
             let swapchains = vec![swapchain];
             let image_indices = vec![image_index];
             let present_info = vk::PresentInfoKHRBuilder::new()
