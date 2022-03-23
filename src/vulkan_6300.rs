@@ -582,7 +582,7 @@ unsafe fn routine_pure_procedural
     let push_constant_range = vk::PushConstantRangeBuilder::new()
         .stage_flags(vk::ShaderStageFlags::VERTEX)
         .offset(0)
-        .size(std::mem::size_of::<PushConstants>() as u32);
+        .size(std::mem::size_of::<glm::Mat4>() as u32);
     let slice = [push_constant_range];
 
     
@@ -840,7 +840,7 @@ unsafe fn update_push_constants
     let view = glm::rotate
     (
         &push_constant.view,
-        delta_time * 4.0,
+        delta_time * 400.0,
         &glm::vec3(1.0, 0.0, 0.0),
 
     );
@@ -943,8 +943,8 @@ pub fn load_model
     for i in 0..(indices_terr_full.len() / 2) {
         indices_terr.push(indices_terr_full[i]);
     }
-    let mut indices = terrain_frustrum_culling(&vertices_terr, indices_terr.clone()).unwrap();
-    Ok((vertices_terr, indices))
+    // let mut indices = terrain_frustrum_culling(&vertices_terr, indices_terr.clone()).unwrap();
+    Ok((vertices_terr, indices_terr))
 }
 
 
@@ -1051,7 +1051,6 @@ unsafe fn create_precursors
     .expect("No suitable physical device found");
 
     Ok((physical_device, queue_family, format, present_mode, device_properties))
-
 
 }
 
@@ -1295,12 +1294,6 @@ unsafe fn record_cb_111
     device.cmd_bind_index_buffer(command_buffer, ib, 0, vk::IndexType::UINT32);
     device.cmd_bind_vertex_buffers(command_buffer, 0, &[vb], &[0]);
     device.cmd_bind_descriptor_sets(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline_layout, 0, &d_sets, &[]);
-
-
-    // let (_, view_b, _) = push_constant.view.as_slice().align_to::<u8>();
-    // let view_bytes = view_b.as_ptr();
-
-    // let ptr = &*view_b as *const c_void;
 
 
 

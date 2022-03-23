@@ -21,14 +21,10 @@ layout(location = 1) in vec4 inColor;
 layout(location = 0) out vec3 fragColor;
 
 
-// mat4 t1 = mat4(
-//     1.0, 0.0, 0.0, 0.0,
-//     0.0, 1.0, 0.0, 0.0,
-//     0.0, 0.0, 1.0, 0.0,
-//     0.0, 0.0, 0.0, 2.0
-// );
+
 
 void main() {
-    gl_Position = ubo.proj * ubo.view * ubo.model * vec4(inPosition);
+    // gl_Position = ubo.proj * ubo.model * pcs.view * vec4(inPosition);
+    gl_Position = ubo.proj * pcs.view * ubo.model * vec4(inPosition);
     fragColor = vec3(inColor);
 }
