@@ -49,7 +49,7 @@ use structopt::StructOpt;
 const TITLE: &str = "vulkan-routine";
 const FRAMES_IN_FLIGHT: usize = 2;
 const LAYER_KHRONOS_VALIDATION: *const c_char = cstr!("VK_LAYER_KHRONOS_validation");
-const SHADER_VERT: &[u8] = include_bytes!("../spv/s_300__.vert.spv");
+const SHADER_VERT: &[u8] = include_bytes!("../spv/s_400_.vert.spv");
 const SHADER_FRAG: &[u8] = include_bytes!("../spv/s1.frag.spv");
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -699,6 +699,12 @@ unsafe fn routine_pure_procedural
         .collect();
     let mut images_in_flight: Vec<_> = swapchain_images.iter().map(|_| vk::Fence::null()).collect();
     let mut frame = 0;
+
+
+
+
+    let mut button_push: [bool; 2] = [false; 2];
+
     
     #[allow(clippy::collapsible_match, clippy::single_match)]
     event_loop.run(move |event, _, control_flow| match event {
@@ -715,11 +721,18 @@ unsafe fn routine_pure_procedural
                 state,
                 ..
             }) => match (keycode, state) {
+
                 (VirtualKeyCode::Escape, ElementState::Released) => {
                     *control_flow = ControlFlow::Exit
-                }
+                },
+                (winit::event::VirtualKeyCode::Space, ElementState::Released) => {
+                    button_push[frame] = true;
+                    // Very sketchy hacky winit event handling, been ahile since I delved into this library, and usage with Rust constructs.
+                },
                 _ => (),
+
             },
+
             _ => (),
         },
         Event::MainEventsCleared => {
@@ -735,9 +748,20 @@ unsafe fn routine_pure_procedural
 
             let delta_time = now.elapsed().as_secs_f32();
 
-            update_push_constants(&mut push_constant, delta_time);
+            println!("\n delta_time {:?}\n", delta_time);
 
-            update_uniform_buffer(&device, &mut uniform_transform, &mut uniform_buffers_memories, &mut uniform_buffers, image_index as usize, 3.2);
+
+            if button_push[frame] {
+                push_constant = update_push_constants(push_constant, delta_time).unwrap();
+                println!("\n\nNow push constants are {:?}\n\n", push_constant);
+    
+    
+                // update_uniform_buffer(&device, &mut uniform_transform, &mut uniform_buffers_memories, &mut uniform_buffers, image_index as usize, 3.2);
+
+            }
+
+
+            button_push[frame] = false;
 
 
 
@@ -791,6 +815,10 @@ unsafe fn routine_pure_procedural
                 .image_indices(&image_indices);
             device.queue_present_khr(queue, &present_info).unwrap();
             frame = (frame + 1) % FRAMES_IN_FLIGHT;
+
+
+
+
         }
         // Event::LoopDestroyed => unsafe {
         //     device.device_wait_idle().unwrap();
@@ -832,22 +860,24 @@ unsafe fn routine_pure_procedural
 
 
 unsafe fn update_push_constants
+<'a>
 (
-    push_constant: &mut PushConstants,
+    mut push_constant: PushConstants,
     delta_time: f32,
 )
+-> Result<PushConstants, &'a str>
 {
     let view = glm::rotate
     (
         &push_constant.view,
-        delta_time * 400.0,
-        &glm::vec3(1.0, 0.0, 0.0),
+        delta_time * 0.2,
+        &glm::vec3(1.0, 0.4, 0.3),
 
     );
 
     push_constant.view = view;
     // push_constant.view = Matrix4::from_axis_angle(Vector3::new(0.2, 1.0, 0.0), Deg(0.110) * delta_time) * push_constant.view;
-
+    Ok(push_constant)
 }
 
 
@@ -944,115 +974,19 @@ pub fn load_model
         indices_terr.push(indices_terr_full[i]);
     }
     // let mut indices = terrain_frustrum_culling(&vertices_terr, indices_terr.clone()).unwrap();
+
+
+    println!("\n\nBefore {}", indices_terr.len());
+
+    // indices_terr = mesh_cull_9945(indices_terr).unwrap();
+    println!("After: {}\n\n", indices_terr.len());
+
     Ok((vertices_terr, indices_terr))
 }
 
 
 
-unsafe fn create_precursors
-<'a>
-(
-    instance: &InstanceLoader,
-    surface: vk::SurfaceKHR,
-)
--> Result<(vk::PhysicalDevice, u32, vk::SurfaceFormatKHR, vk::PresentModeKHR, vk::PhysicalDeviceProperties), &'a str>
-{
-    let device_extensions = vec![  // trying to type the contents of this vector to be able to pass between functions..todo.
-        vk::KHR_SWAPCHAIN_EXTENSION_NAME,
-        vk::KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
-        vk::KHR_RAY_QUERY_EXTENSION_NAME,
-        vk::KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
-        vk::KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
-        vk::KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME,
-        vk::KHR_SPIRV_1_4_EXTENSION_NAME,
-        vk::KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
-        vk::EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
-    ];
 
-    let (physical_device, queue_family, format, present_mode, device_properties) =
-
-    instance.enumerate_physical_devices(None)
-    .unwrap()
-    .into_iter()
-    .filter_map(|physical_device| {
-        let queue_family = match instance
-            .get_physical_device_queue_family_properties(physical_device, None)
-            .into_iter()
-            .enumerate()
-            .position(|(i, queue_family_properties)| {
-                queue_family_properties
-                    .queue_flags
-                    .contains(vk::QueueFlags::GRAPHICS)
-                    // (
-                    //     .contains(vk::QueueFlags::GRAPHICS)
-                    //     && .contains(vk::QueueFlags::TRANSFER)
-                    // )
-                    // .contains(vk::QueueFlags::TRANSFER)
-                    && instance
-                        .get_physical_device_surface_support_khr(
-                            physical_device,
-                            i as u32,
-                            surface,
-                        )
-                        .unwrap()
-            }) {
-            Some(queue_family) => queue_family as u32,
-            None => return None,
-        };
-        let formats = instance
-            .get_physical_device_surface_formats_khr(physical_device, surface, None)
-            .unwrap();
-        let format = match formats
-            .iter()
-            .find(|surface_format| {
-                (surface_format.format == vk::Format::B8G8R8A8_SRGB
-                    || surface_format.format == vk::Format::R8G8B8A8_SRGB)
-                    && surface_format.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR_KHR
-            })
-            .or_else(|| formats.get(0))
-        {
-            Some(surface_format) => *surface_format,
-            None => return None,
-        };
-        let present_mode = instance
-            .get_physical_device_surface_present_modes_khr(physical_device, surface, None)
-            .unwrap()
-            .into_iter()
-            .find(|present_mode| present_mode == &vk::PresentModeKHR::MAILBOX_KHR)
-            .unwrap_or(vk::PresentModeKHR::FIFO_KHR);
-        let supported_device_extensions = instance
-            .enumerate_device_extension_properties(physical_device, None, None)
-            .unwrap();
-        let device_extensions_supported =
-            device_extensions.iter().all(|device_extension| {
-                let device_extension = CStr::from_ptr(*device_extension);
-
-                supported_device_extensions.iter().any(|properties| {
-                    CStr::from_ptr(properties.extension_name.as_ptr()) == device_extension
-                })
-            });
-        if !device_extensions_supported {
-            return None;
-        }
-        let device_properties = instance.get_physical_device_properties(physical_device);
-        Some((
-            physical_device,
-            queue_family,
-            format,
-            present_mode,
-            device_properties,
-        ))
-    })
-    .max_by_key(|(_, _, _, _, properties)| match properties.device_type {
-        vk::PhysicalDeviceType::DISCRETE_GPU => 2,
-        vk::PhysicalDeviceType::INTEGRATED_GPU => 1,
-        _ => 0,
-    })
-    .expect("No suitable physical device found");
-
-    Ok((physical_device, queue_family, format, present_mode, device_properties))
-
-}
 
 
 
@@ -1317,4 +1251,197 @@ unsafe fn record_cb_111
 
 
     Ok(())
+}
+
+
+
+
+unsafe fn render_pipeline_orig
+<'a>
+(
+
+)
+-> Result <(), &'a str>
+{
+
+    Ok(())
+
+}
+
+
+unsafe fn render_pipeline_202
+<'a>
+(
+
+)
+-> Result<(), &'a str>
+{
+
+    Ok(())
+}
+
+
+
+// Tesselation shader
+// Secondary command buffer recorded on separate thread.
+// Legacy rasterization.
+unsafe fn render_pipeline_688
+<'a>
+(
+
+)
+-> Result<(), &'a str>
+{
+    Ok(())
+}
+
+
+
+
+// Cubes,
+// Scissors
+// Multiscene renders.
+
+
+
+
+
+
+
+
+
+unsafe fn create_precursors
+<'a>
+(
+    instance: &InstanceLoader,
+    surface: vk::SurfaceKHR,
+)
+-> Result<(vk::PhysicalDevice, u32, vk::SurfaceFormatKHR, vk::PresentModeKHR, vk::PhysicalDeviceProperties), &'a str>
+{
+    let device_extensions = vec![  // trying to type the contents of this vector to be able to pass between functions..todo.
+        vk::KHR_SWAPCHAIN_EXTENSION_NAME,
+        vk::KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+        vk::KHR_RAY_QUERY_EXTENSION_NAME,
+        vk::KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+        vk::KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+        vk::KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME,
+        vk::KHR_SPIRV_1_4_EXTENSION_NAME,
+        vk::KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
+        vk::EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
+    ];
+
+    let (physical_device, queue_family, format, present_mode, device_properties) =
+
+    instance.enumerate_physical_devices(None)
+    .unwrap()
+    .into_iter()
+    .filter_map(|physical_device| {
+        let queue_family = match instance
+            .get_physical_device_queue_family_properties(physical_device, None)
+            .into_iter()
+            .enumerate()
+            .position(|(i, queue_family_properties)| {
+                queue_family_properties
+                    .queue_flags
+                    .contains(vk::QueueFlags::GRAPHICS)
+                    // (
+                    //     .contains(vk::QueueFlags::GRAPHICS)
+                    //     && .contains(vk::QueueFlags::TRANSFER)
+                    // )
+                    // .contains(vk::QueueFlags::TRANSFER)
+                    && instance
+                        .get_physical_device_surface_support_khr(
+                            physical_device,
+                            i as u32,
+                            surface,
+                        )
+                        .unwrap()
+            }) {
+            Some(queue_family) => queue_family as u32,
+            None => return None,
+        };
+        let formats = instance
+            .get_physical_device_surface_formats_khr(physical_device, surface, None)
+            .unwrap();
+        let format = match formats
+            .iter()
+            .find(|surface_format| {
+                (surface_format.format == vk::Format::B8G8R8A8_SRGB
+                    || surface_format.format == vk::Format::R8G8B8A8_SRGB)
+                    && surface_format.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR_KHR
+            })
+            .or_else(|| formats.get(0))
+        {
+            Some(surface_format) => *surface_format,
+            None => return None,
+        };
+        let present_mode = instance
+            .get_physical_device_surface_present_modes_khr(physical_device, surface, None)
+            .unwrap()
+            .into_iter()
+            .find(|present_mode| present_mode == &vk::PresentModeKHR::MAILBOX_KHR)
+            .unwrap_or(vk::PresentModeKHR::FIFO_KHR);
+        let supported_device_extensions = instance
+            .enumerate_device_extension_properties(physical_device, None, None)
+            .unwrap();
+        let device_extensions_supported =
+            device_extensions.iter().all(|device_extension| {
+                let device_extension = CStr::from_ptr(*device_extension);
+
+                supported_device_extensions.iter().any(|properties| {
+                    CStr::from_ptr(properties.extension_name.as_ptr()) == device_extension
+                })
+            });
+        if !device_extensions_supported {
+            return None;
+        }
+        let device_properties = instance.get_physical_device_properties(physical_device);
+        Some((
+            physical_device,
+            queue_family,
+            format,
+            present_mode,
+            device_properties,
+        ))
+    })
+    .max_by_key(|(_, _, _, _, properties)| match properties.device_type {
+        vk::PhysicalDeviceType::DISCRETE_GPU => 2,
+        vk::PhysicalDeviceType::INTEGRATED_GPU => 1,
+        _ => 0,
+    })
+    .expect("No suitable physical device found");
+
+    Ok((physical_device, queue_family, format, present_mode, device_properties))
+
+}
+
+
+
+
+// There are 16k vertices in that mesh, which is killing our card with naive pipeline, 
+// no multithreading, etc.  Simple function takes the indices list and just chops two out of every
+// three triangles in the sequence, meaning it removes three entries from the list to remove a 
+// triangle. We can also take out large regions en-masse.  
+fn mesh_cull_9945
+<'a>
+(
+    mut indices: Vec<u32>,
+)
+-> Result <Vec<u32>, &'a str>
+{
+    // let mut jdx : usize = 0;
+    // let mut cool : bool = true;
+    // while cool {
+    //     let start = jdx as usize;
+    //     let end = (jdx + 3) as usize; 
+    //     indices.drain(start..end);
+    //     jdx += 12;
+    //     if jdx > (indices.len()) {
+    //         cool = false;
+    //     }
+    // }
+
+
+    indices.drain(3000..);
+    Ok(indices)
 }
