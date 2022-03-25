@@ -88,6 +88,16 @@ struct Opt {
     #[structopt(short, long)]
     validation_layers: bool,
 }
+
+
+struct ControlInput {
+    roll: i32,
+    pitch: i32,
+    yaw: i32,
+    skew: i32,
+}
+
+
 // static mut log_300: Vec<String> = vec!();
 unsafe extern "system" fn debug_callback(
     _message_severity: vk::DebugUtilsMessageSeverityFlagBitsEXT,
@@ -339,20 +349,20 @@ unsafe fn routine_pure_procedural
         uniform_buffers.push(uniform_buffer);
         uniform_buffers_memories.push(uniform_buffer_memory);
     }
-
+    let scalar_22 = 1.5;
     let mut uniform_transform = UniformBufferObject {
         model: 
         // Matrix4::from_translation(Vector3::new(5.0, 5.0, 5.0))
-        Matrix4::from_angle_y(Deg(10.0))
-            * Matrix4::from_nonuniform_scale(0.5, 0.5, 0.5),
+        Matrix4::from_angle_y(Deg(1.0))
+            * Matrix4::from_nonuniform_scale(scalar_22, scalar_22, scalar_22),
         view: Matrix4::look_at_rh(
-            Point3::new(0.80, 0.80, 0.80),
+            Point3::new(0.40, 0.40, 0.40),
             Point3::new(0.0, 0.0, 0.0),
             Vector3::new(0.0, 0.0, 1.0),
         ),
         proj: {
             let mut proj = cgmath::perspective(
-                Deg(30.0),
+                Deg(45.0),
                 swapchain_image_extent.width as f32
                     / swapchain_image_extent.height as f32,
                 0.1,
@@ -364,11 +374,12 @@ unsafe fn routine_pure_procedural
     };
 
 
-    let view: glm::Mat4 = glm::look_at_rh
+    let scalar_33 = 100000000.0;
+    let mut view: glm::Mat4 = glm::look_at::<f32>
     (
-        &glm::vec3(0.80, 0.80, 0.80),
+        &glm::vec3(1.0 / scalar_33, 1.0 / scalar_33, 1.0 / scalar_33),
         &glm::vec3(0.0, 0.0, 0.0),
-        &glm::vec3(0.0, 0.0, 1.0),
+        &glm::vec3(0.0, 1.0, 0.0),
     );
 
     let mut push_constant = PushConstants {
@@ -705,6 +716,18 @@ unsafe fn routine_pure_procedural
 
     let mut button_push: [bool; 2] = [false; 2];
 
+
+
+
+
+
+
+    let mut control_input = ControlInput {
+        roll: 0,
+        pitch: 0,
+        yaw: 0,
+        skew: 0,
+    };
     
     #[allow(clippy::collapsible_match, clippy::single_match)]
     event_loop.run(move |event, _, control_flow| match event {
@@ -729,6 +752,18 @@ unsafe fn routine_pure_procedural
                     button_push[frame] = true;
                     // Very sketchy hacky winit event handling, been ahile since I delved into this library, and usage with Rust constructs.
                 },
+                (winit::event::VirtualKeyCode::Right, ElementState::Pressed) => {
+                    control_input.roll += 1;
+                },
+                (winit::event::VirtualKeyCode::Left, ElementState::Pressed) => {
+                    control_input.roll -= 1;
+                },
+                (winit::event::VirtualKeyCode::Up, ElementState::Pressed) => {
+                    control_input.pitch -= 1;
+                },
+                (winit::event::VirtualKeyCode::Down, ElementState::Pressed) => {
+                    control_input.pitch += 1;
+                },
                 _ => (),
 
             },
@@ -748,17 +783,28 @@ unsafe fn routine_pure_procedural
 
             let delta_time = now.elapsed().as_secs_f32();
 
-            println!("\n delta_time {:?}\n", delta_time);
 
 
             if button_push[frame] {
                 push_constant = update_push_constants(push_constant, delta_time).unwrap();
-                println!("\n\nNow push constants are {:?}\n\n", push_constant);
     
     
                 // update_uniform_buffer(&device, &mut uniform_transform, &mut uniform_buffers_memories, &mut uniform_buffers, image_index as usize, 3.2);
 
             }
+            
+
+
+
+            // push_constant.view = 
+
+            // update_uniform_buffer(&device, &mut uniform_transform, &mut uniform_buffers_memories, &mut uniform_buffers, image_index as usize, 3.2);
+            // push_constant = update_push_constants(push_constant, delta_time).unwrap();
+
+
+
+
+            // mutate_view_matrix(&mut push_constant.view, &mut control_input);
 
 
             button_push[frame] = false;
@@ -870,8 +916,8 @@ unsafe fn update_push_constants
     let view = glm::rotate
     (
         &push_constant.view,
-        delta_time * 0.2,
-        &glm::vec3(1.0, 0.4, 0.3),
+        delta_time * 0.002,
+        &glm::vec3(0.1, 0.2, 0.2),
 
     );
 
@@ -892,7 +938,7 @@ unsafe fn update_uniform_buffer
 )
 {
     uniform_transform.model =
-        Matrix4::from_axis_angle(Vector3::new(1.0, 0.0, 0.0), Deg(0.110) * delta_time)
+        Matrix4::from_axis_angle(Vector3::new(0.0, 0.0, 0.0), Deg(0.110) * delta_time)
             * uniform_transform.model;
     let uni_transform_slice = [uniform_transform.clone()];
     let buffer_size = (std::mem::size_of::<UniformBufferObject>() * uni_transform_slice.len()) as u64;
@@ -1444,4 +1490,103 @@ fn mesh_cull_9945
 
     indices.drain(3000..);
     Ok(indices)
+}
+
+
+
+
+
+// Control the view matrix with keyboard like flight controls.  Arrows for roll and pitch, z and c for yaw, pg-up and pg-down for skew/translation
+
+fn mutate_view_matrix
+<'a>
+(
+    view: &mut glm::Mat4,
+    control_input: &mut ControlInput,
+)
+-> Result <(), &'a str>
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // First we need to inspect the view matrix given to determine the vector normal of the camera view.  This is 
+    // Since our model is at the origin, the view vector of the camera since it's pointing at the origin is the 
+    // situational point of the camera, but negative of that.  so if the camera went up to .5, .5, .5, it's pointed at the origin,
+    // but the vector of it's view axis is negative where it is.  
+
+    // if the model was at 1,1,1
+
+    
+
+
+
+    // roll would be rotation around the axis normal of the camera look at point.
+    // pitch would be a rotation around one axis perpendicular to the camera view.
+    // yaw is rotation around the other axis perpindicular to the camera view.
+    // translation will be through the camera's view.
+    
+
+    Ok(())
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+
+
+
+
+
+
+    #[test]
+    fn test_mutate_view_matrix() {
+
+
+
+        let mut control_input = ControlInput {
+            roll: 0,
+            pitch: 0,
+            yaw: 0,
+            skew: 0,
+        };
+
+        let scalar_33 = 100000000.0;
+        let mut view: glm::Mat4 = glm::look_at::<f32>
+        (
+            &glm::vec3(1.0 / scalar_33, 1.0 / scalar_33, 1.0 / scalar_33),
+            &glm::vec3(0.0, 0.0, 0.0),
+            &glm::vec3(0.0, 1.0, 0.0),
+        );
+
+        // mutate_view_matrix(&mut view, &mut control_input);
+
+
+
+        assert_eq!(3, 3);
+    }
+
 }
