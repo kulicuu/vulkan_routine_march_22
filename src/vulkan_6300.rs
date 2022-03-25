@@ -90,6 +90,15 @@ struct Opt {
 }
 
 
+
+
+struct Camera {
+    location: glm::Vec3,
+    target: glm::Vec3,  // not necessarily normalized, this one to one with the look_at (or look_at_rh) function.
+    up: glm::Vec3,  // yaw axis in direction of up
+}
+
+
 struct ControlInput {
     roll: i32,
     pitch: i32,
@@ -374,12 +383,22 @@ unsafe fn routine_pure_procedural
     };
 
 
+
     let scalar_33 = 100000000.0;
+
+
+    let mut camera = Camera {
+        location: glm::vec3(1.0 / scalar_33, 1.0 / scalar_33, 1.0 / scalar_33),
+        target: glm::vec3(0.0, 0.0, 0.0),
+        up: glm::vec3(0.0, 1.0, 0.0),
+    };
+
+
     let mut view: glm::Mat4 = glm::look_at::<f32>
     (
-        &glm::vec3(1.0 / scalar_33, 1.0 / scalar_33, 1.0 / scalar_33),
-        &glm::vec3(0.0, 0.0, 0.0),
-        &glm::vec3(0.0, 1.0, 0.0),
+        &camera.location,
+        &camera.target,
+        &camera.up,
     );
 
     let mut push_constant = PushConstants {
@@ -1462,8 +1481,6 @@ unsafe fn create_precursors
 }
 
 
-
-
 // There are 16k vertices in that mesh, which is killing our card with naive pipeline, 
 // no multithreading, etc.  Simple function takes the indices list and just chops two out of every
 // three triangles in the sequence, meaning it removes three entries from the list to remove a 
@@ -1493,31 +1510,53 @@ fn mesh_cull_9945
 }
 
 
-
-
-
 // Control the view matrix with keyboard like flight controls.  Arrows for roll and pitch, z and c for yaw, pg-up and pg-down for skew/translation
 
-fn mutate_view_matrix
+fn transform_camera
 <'a>
 (
+    camera: &mut Camera,
     view: &mut glm::Mat4,
     control_input: &mut ControlInput,
 )
 -> Result <(), &'a str>
 {
 
+    let scalar_45 = 0.3;
+
+    // camera up is the yaw axis.
+    // So that's what we keep transforming.
+    let orientation: glm::Vec3 = glm::normalize(&(camera.target - camera.location));
+    // Orientation is the roll axis.  with the direction of positive skew.
+    // let pitch_axis = glm::cross(orientation, &camera.up);
+
+    let view_rolled = glm::rotate(&view, (control_input.roll as f32) * scalar_45, &orientation);
+    // this transforms the whole view matrix with rotation over the roll axis, called orientation.
+
+
+    camera.up = glm::rotate_vec3(&camera.up, (control_input.roll as f32) * scalar_45, &orientation);  // this transforms the yaw axis by the rotation matrix.
+
+
+    // Pitch axis is up-vector/yax-axis crossed with orientation-vector/roll-axis.
+    let pitch_axis: glm::Vec3 = glm::normalize(&glm::cross(&orientation, &camera.up));  
+    // We may as well just store this memoize it, and transform as needed.
+
+    // The axis for the pitch can be gotten from the cross product of the orientation vector with...
+
+    let view_pitched = glm::rotate(&view_rolled, (control_input.pitch as f32) * scalar_45, &pitch_axis);
+
+    // let view = view_yawwed...
+    let view = glm::rotate(&view_pitched, (control_input.yaw as f32) * scalar_45, &camera.up);  // May need to do this before modifying that vector?
 
 
 
+    // let = camera.location - camera.orientation
 
 
+    // Okay actually what we should be doing is maintaining independent state of the view object,
+    // in a struct,  This feeds the look_at function.
 
-
-
-
-
-
+    println!("view: {:?}", view);
 
     // First we need to inspect the view matrix given to determine the vector normal of the camera view.  This is 
     // Since our model is at the origin, the view vector of the camera since it's pointing at the origin is the 
@@ -1540,52 +1579,31 @@ fn mutate_view_matrix
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
 #[cfg(test)]
 mod tests {
-
     use super::*;
-
-
-
-
-
-
-
     #[test]
-    fn test_mutate_view_matrix() {
-
-
-
+    fn test_transform_camera() {
         let mut control_input = ControlInput {
             roll: 0,
             pitch: 0,
             yaw: 0,
             skew: 0,
         };
-
         let scalar_33 = 100000000.0;
+        let mut camera = Camera {
+            location: glm::vec3(1.0 / scalar_33, 1.0 / scalar_33, 1.0 / scalar_33),
+            target: glm::vec3(0.0, 0.0, 0.0),
+            up: glm::vec3(0.0, 1.0, 0.0),
+        };
         let mut view: glm::Mat4 = glm::look_at::<f32>
         (
-            &glm::vec3(1.0 / scalar_33, 1.0 / scalar_33, 1.0 / scalar_33),
-            &glm::vec3(0.0, 0.0, 0.0),
-            &glm::vec3(0.0, 1.0, 0.0),
+            &camera.location,
+            &camera.target,
+            &camera.up,
         );
-
-        // mutate_view_matrix(&mut view, &mut control_input);
-
-
-
+        let result = transform_camera(&mut camera, &mut view, &mut control_input).unwrap();
+        println!("result: {:?}", result);
         assert_eq!(3, 3);
     }
 
