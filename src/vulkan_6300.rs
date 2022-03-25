@@ -769,7 +769,6 @@ unsafe fn routine_pure_procedural
                 },
                 (winit::event::VirtualKeyCode::Space, ElementState::Released) => {
                     button_push[frame] = true;
-                    // Very sketchy hacky winit event handling, been ahile since I delved into this library, and usage with Rust constructs.
                 },
                 (winit::event::VirtualKeyCode::Right, ElementState::Pressed) => {
                     control_input.roll += 1;
@@ -782,6 +781,12 @@ unsafe fn routine_pure_procedural
                 },
                 (winit::event::VirtualKeyCode::Down, ElementState::Pressed) => {
                     control_input.pitch += 1;
+                },
+                (winit::event::VirtualKeyCode::Semicolon, ElementState::Pressed) => {
+                    control_input.yaw -= 1;
+                },
+                (winit::event::VirtualKeyCode::J, ElementState::Pressed) => {
+                    control_input.yaw += 1;
                 },
                 _ => (),
 
@@ -804,13 +809,20 @@ unsafe fn routine_pure_procedural
 
 
 
-            if button_push[frame] {
-                push_constant = update_push_constants(push_constant, delta_time).unwrap();
-    
-    
-                // update_uniform_buffer(&device, &mut uniform_transform, &mut uniform_buffers_memories, &mut uniform_buffers, image_index as usize, 3.2);
+            transform_camera(&mut camera, &mut push_constant.view, &mut control_input);
 
-            }
+
+
+            // push_constant = update_push_constants(push_constant, delta_time).unwrap();
+
+
+            // if button_push[frame] {
+            //     push_constant = update_push_constants(push_constant, delta_time).unwrap();
+    
+    
+            //     // update_uniform_buffer(&device, &mut uniform_transform, &mut uniform_buffers_memories, &mut uniform_buffers, image_index as usize, 3.2);
+
+            // }
             
 
 
@@ -1546,7 +1558,7 @@ fn transform_camera
     let view_pitched = glm::rotate(&view_rolled, (control_input.pitch as f32) * scalar_45, &pitch_axis);
 
     // let view = view_yawwed...
-    let view = glm::rotate(&view_pitched, (control_input.yaw as f32) * scalar_45, &camera.up);  // May need to do this before modifying that vector?
+    *view = glm::rotate(&view_pitched, (control_input.yaw as f32) * scalar_45, &camera.up);  // May need to do this before modifying that vector?
 
 
 
@@ -1556,7 +1568,7 @@ fn transform_camera
     // Okay actually what we should be doing is maintaining independent state of the view object,
     // in a struct,  This feeds the look_at function.
 
-    println!("view: {:?}", view);
+    // println!("view: {:?}", view);
 
     // First we need to inspect the view matrix given to determine the vector normal of the camera view.  This is 
     // Since our model is at the origin, the view vector of the camera since it's pointing at the origin is the 
@@ -1566,7 +1578,13 @@ fn transform_camera
     // if the model was at 1,1,1
 
     
-
+    
+    *control_input = ControlInput {
+        roll: 0,
+        pitch: 0,
+        yaw: 0,
+        skew: 0
+    };
 
 
     // roll would be rotation around the axis normal of the camera look at point.
