@@ -93,7 +93,7 @@ struct Opt {
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-struct Camera {
+struct OldCamera {
     location: glm::Vec3,
     target: glm::Vec3,  // not necessarily normalized, this one to one with the look_at (or look_at_rh) function.
     up: glm::Vec3,  // yaw axis in direction of up
@@ -387,21 +387,41 @@ unsafe fn routine_pure_procedural
 
 
     let scalar_33 = 100000000.0;
+    let camera_location = glm::vec3(1.0 / scalar_33, 1.0 / scalar_33, 1.0 / scalar_33);
+    let image_target = glm::vec3(0.0, 0.0, 0.0);
 
-
+    let roll_axis_normal: glm::Vec3 = glm::normalize(&(camera_location - image_target));
+    let yaw_axis_normal: glm::Vec3 = glm::vec3(0.0, 1.0, 0.0);  // Also known as the 'up' vector.
+    let pitch_axis_normal: glm::Vec3 = glm::cross(&roll_axis_normal, &yaw_axis_normal);
     let mut camera = Camera {
-        location: glm::vec3(1.0 / scalar_33, 1.0 / scalar_33, 1.0 / scalar_33),
-        target: glm::vec3(0.0, 0.0, 0.0),
-        up: glm::vec3(0.0, 1.0, 0.0),
+        position: camera_location,
+        attitude: Attitude {
+            roll_axis_normal,
+            pitch_axis_normal,
+            yaw_axis_normal, 
+        }
     };
+
+
+    // let mut old_camera = Camera {
+    //     location: glm::vec3(1.0 / scalar_33, 1.0 / scalar_33, 1.0 / scalar_33),
+    //     target: glm::vec3(0.0, 0.0, 0.0),
+    //     up: glm::vec3(0.0, 1.0, 0.0),
+    // };
 
 
     let mut view: glm::Mat4 = glm::look_at::<f32>
     (
-        &camera.location,
-        &camera.target,
-        &camera.up,
+        &camera_location,
+        &image_target,
+        &yaw_axis_normal,
     );
+    // let mut old_view: glm::Mat4 = glm::look_at::<f32>
+    // (
+    //     &camera_location,
+    //     &camera_target,
+    //     // &yaw_axis_normal,
+    // );
 
     let mut push_constant = PushConstants {
         view: view,
@@ -1524,67 +1544,25 @@ fn mesh_cull_9945
 }
 
 
-// Control the view matrix with keyboard like flight controls.  Arrows for roll and pitch, z and c for yaw, pg-up and pg-down for skew/translation
 
 fn transform_camera
 <'a>
 (
     camera: &mut Camera,
-    view: &mut glm::Mat4,
+    view_matrix: &mut glm::Mat4,
     control_input: &mut ControlInput,
 )
 -> Result <(), &'a str>
 {
-
+ 
     let scalar_45 = 0.03;
 
-    // camera up is the yaw axis.
-    // So that's what we keep transforming.
-    let orientation: glm::Vec3 = glm::normalize(&(camera.target - camera.location));
-    // Orientation is the roll axis.  with the direction of positive skew.
-    // let pitch_axis = glm::cross(orientation, &camera.up);
-
-    let view_rolled = glm::rotate(&view, (control_input.roll as f32) * scalar_45, &orientation);
-    // this transforms the whole view matrix with rotation over the roll axis, called orientation.
-
-
-    camera.up = glm::rotate_vec3(&camera.up, (control_input.roll as f32) * scalar_45, &orientation);  // this transforms the yaw axis by the rotation matrix.
-
-
-    // Pitch axis is up-vector/yax-axis crossed with orientation-vector/roll-axis.
-    let pitch_axis: glm::Vec3 = glm::normalize(&glm::cross(&orientation, &camera.up));  
-    // We may as well just store this memoize it, and transform as needed.
-
-    // The axis for the pitch can be gotten from the cross product of the orientation vector with...
-
-    let view_pitched = glm::rotate(&view_rolled, (control_input.pitch as f32) * scalar_45, &pitch_axis);
-
-    // let view = view_yawwed...
-    *view = glm::rotate(&view_pitched, (control_input.yaw as f32) * scalar_45, &camera.up);  // May need to do this before modifying that vector?
+    *view_matrix = glm::rotate(&view_matrix, (control_input.roll as f32) * scalar_45, &camera.attitude.roll_axis_normal);
+    *view_matrix = glm::rotate(&view_matrix, (control_input.pitch as f32) * scalar_45, &camera.attitude.pitch_axis_normal);
+    *view_matrix = glm::rotate(&view_matrix, (control_input.yaw as f32) * scalar_45, &camera.attitude.yaw_axis_normal);
 
 
 
-    // let = camera.location - camera.orientation
-
-
-    // Okay actually what we should be doing is maintaining independent state of the view object,
-    // in a struct,  This feeds the look_at function.
-
-    // println!("view: {:?}", view);
-
-    // First we need to inspect the view matrix given to determine the vector normal of the camera view.  This is 
-    // Since our model is at the origin, the view vector of the camera since it's pointing at the origin is the 
-    // situational point of the camera, but negative of that.  so if the camera went up to .5, .5, .5, it's pointed at the origin,
-    // but the vector of it's view axis is negative where it is.  
-
-    // if the model was at 1,1,1
-
-
-    // camera at 1, -1.  target at 1, 1.  
-    // so the orientation vector not normalized should be 0, 2, which comes from camera - target.  
-
-    
-    
     *control_input = ControlInput {
         roll: 0,
         pitch: 0,
@@ -1592,15 +1570,88 @@ fn transform_camera
         skew: 0
     };
 
-
-    // roll would be rotation around the axis normal of the camera look at point.
-    // pitch would be a rotation around one axis perpendicular to the camera view.
-    // yaw is rotation around the other axis perpindicular to the camera view.
-    // translation will be through the camera's view.
-    
-
     Ok(())
 }
+
+
+
+
+// // Control the view matrix with keyboard like flight controls.  Arrows for roll and pitch, z and c for yaw, pg-up and pg-down for skew/translation
+// fn old_transform_camera
+// <'a>
+// (
+//     camera: &mut Camera,
+//     view: &mut glm::Mat4,
+//     control_input: &mut ControlInput,
+// )
+// -> Result <(), &'a str>
+// {
+
+//     let scalar_45 = 0.03;
+
+//     // camera up is the yaw axis.
+//     // So that's what we keep transforming.
+//     let orientation: glm::Vec3 = glm::normalize(&(camera.target - camera.location));
+//     // Orientation is the roll axis.  with the direction of positive skew.
+//     // let pitch_axis = glm::cross(orientation, &camera.up);
+
+//     let view_rolled = glm::rotate(&view, (control_input.roll as f32) * scalar_45, &orientation);
+//     // this transforms the whole view matrix with rotation over the roll axis, called orientation.
+
+
+//     camera.up = glm::rotate_vec3(&camera.up, (control_input.roll as f32) * scalar_45, &orientation);  // this transforms the yaw axis by the rotation matrix.
+
+
+//     // Pitch axis is up-vector/yax-axis crossed with orientation-vector/roll-axis.
+//     let pitch_axis: glm::Vec3 = glm::normalize(&glm::cross(&orientation, &camera.up));  
+//     // We may as well just store this memoize it, and transform as needed.
+
+//     // The axis for the pitch can be gotten from the cross product of the orientation vector with...
+
+//     let view_pitched = glm::rotate(&view_rolled, (control_input.pitch as f32) * scalar_45, &pitch_axis);
+
+//     // let view = view_yawwed...
+//     *view = glm::rotate(&view_pitched, (control_input.yaw as f32) * scalar_45, &camera.up);  // May need to do this before modifying that vector?
+
+
+
+//     // let = camera.location - camera.orientation
+
+
+//     // Okay actually what we should be doing is maintaining independent state of the view object,
+//     // in a struct,  This feeds the look_at function.
+
+//     // println!("view: {:?}", view);
+
+//     // First we need to inspect the view matrix given to determine the vector normal of the camera view.  This is 
+//     // Since our model is at the origin, the view vector of the camera since it's pointing at the origin is the 
+//     // situational point of the camera, but negative of that.  so if the camera went up to .5, .5, .5, it's pointed at the origin,
+//     // but the vector of it's view axis is negative where it is.  
+
+//     // if the model was at 1,1,1
+
+
+//     // camera at 1, -1.  target at 1, 1.  
+//     // so the orientation vector not normalized should be 0, 2, which comes from camera - target.  
+
+    
+    
+//     *control_input = ControlInput {
+//         roll: 0,
+//         pitch: 0,
+//         yaw: 0,
+//         skew: 0
+//     };
+
+
+//     // roll would be rotation around the axis normal of the camera look at point.
+//     // pitch would be a rotation around one axis perpendicular to the camera view.
+//     // yaw is rotation around the other axis perpindicular to the camera view.
+//     // translation will be through the camera's view.
+    
+
+//     Ok(())
+// }
 
 
 #[cfg(test)]
@@ -1620,7 +1671,7 @@ mod tests {
             skew: 0,
         };
         let scalar_33 = 100000000.0;
-        let mut camera = Camera {
+        let mut camera = OldCamera {
             location: glm::vec3(1.0 / scalar_33, 1.0 / scalar_33, 1.0 / scalar_33),
             target: glm::vec3(0.0, 0.0, 0.0),
             up: glm::vec3(0.0, 1.0, 0.0),
@@ -1648,7 +1699,7 @@ mod tests {
 
 
 
-        let mut camera = NewCamera {
+        let mut camera = Camera {
             position: camera_location,
             attitude: Attitude {
                 roll_axis_normal,
@@ -1680,7 +1731,7 @@ struct Attitude {
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-struct NewCamera {
+struct Camera {
     attitude: Attitude,
     position: glm::Vec3,
 }
