@@ -91,14 +91,16 @@ struct Opt {
 
 
 
-
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
 struct Camera {
     location: glm::Vec3,
     target: glm::Vec3,  // not necessarily normalized, this one to one with the look_at (or look_at_rh) function.
     up: glm::Vec3,  // yaw axis in direction of up
 }
 
-
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
 struct ControlInput {
     roll: i32,
     pitch: i32,
@@ -1055,7 +1057,7 @@ pub fn load_model
 
     println!("\n\nBefore {}", indices_terr.len());
 
-    // indices_terr = mesh_cull_9945(indices_terr).unwrap();
+    indices_terr = mesh_cull_9945(indices_terr).unwrap();
     println!("After: {}\n\n", indices_terr.len());
 
     Ok((vertices_terr, indices_terr))
@@ -1517,7 +1519,7 @@ fn mesh_cull_9945
     // }
 
 
-    indices.drain(3000..);
+    indices.drain(12000..);
     Ok(indices)
 }
 
@@ -1534,7 +1536,7 @@ fn transform_camera
 -> Result <(), &'a str>
 {
 
-    let scalar_45 = 0.3;
+    let scalar_45 = 0.03;
 
     // camera up is the yaw axis.
     // So that's what we keep transforming.
@@ -1577,6 +1579,10 @@ fn transform_camera
 
     // if the model was at 1,1,1
 
+
+    // camera at 1, -1.  target at 1, 1.  
+    // so the orientation vector not normalized should be 0, 2, which comes from camera - target.  
+
     
     
     *control_input = ControlInput {
@@ -1600,6 +1606,11 @@ fn transform_camera
 #[cfg(test)]
 mod tests {
     use super::*;
+
+
+
+
+
     #[test]
     fn test_transform_camera() {
         let mut control_input = ControlInput {
@@ -1625,4 +1636,51 @@ mod tests {
         assert_eq!(3, 3);
     }
 
+    #[test]
+    fn test_new_camera() {
+        let scalar_33 = 100000000.0;
+        let camera_location = glm::vec3(1.0 / scalar_33, 1.0 / scalar_33, 1.0 / scalar_33);
+        let image_target = glm::vec3(0.0, 0.0, 0.0);
+
+        let roll_axis_normal: glm::Vec3 = glm::normalize(&(camera_location - image_target));
+        let yaw_axis_normal: glm::Vec3 = glm::vec3(0.0, 1.0, 0.0);
+        let pitch_axis_normal: glm::Vec3 = glm::cross(&roll_axis_normal, &yaw_axis_normal);
+
+
+
+        let mut camera = NewCamera {
+            position: camera_location,
+            attitude: Attitude {
+                roll_axis_normal,
+                pitch_axis_normal,
+                yaw_axis_normal,
+            }
+        };
+
+
+
+
+    }
+
+}
+
+
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+struct Attitude {
+    // logically, the third axis normal can be derived from the other two, memoization indicates the third.
+    roll_axis_normal: glm::Vec3,
+    pitch_axis_normal: glm::Vec3,
+    yaw_axis_normal: glm::Vec3,
+}
+
+
+
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+struct NewCamera {
+    attitude: Attitude,
+    position: glm::Vec3,
 }
