@@ -1,3 +1,6 @@
+// PIpeline 101 is a basic pipeline used for main render, terrain render program.
+
+
 
 use erupt::{
     cstr,
@@ -45,15 +48,14 @@ pub unsafe fn pipeline_101
 <'a>
 (
     device: &erupt::DeviceLoader,
+    render_pass: &vk::RenderPass,
     format: &vk::SurfaceFormatKHR,
     swapchain_image_extent: &vk::Extent2D,
-    // depth_image_view: &vk::ImageView,
-    
 )
 -> Result<(
         vk::Pipeline,
         vk::PipelineLayout,
-        vk::RenderPass,
+        // vk::RenderPass,
         vk::ImageView,
     ), 
     &'a str>
@@ -233,54 +235,54 @@ pub unsafe fn pipeline_101
 
 
     let pipeline_layout = device.create_pipeline_layout(&pipeline_layout_info, None).unwrap();
-    let attachments = vec![
-        vk::AttachmentDescriptionBuilder::new()
-            .format(format.format)
-            .samples(vk::SampleCountFlagBits::_1)
-            .load_op(vk::AttachmentLoadOp::CLEAR)
-            .store_op(vk::AttachmentStoreOp::STORE)
-            .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
-            .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
-            .initial_layout(vk::ImageLayout::UNDEFINED)
-            .final_layout(vk::ImageLayout::PRESENT_SRC_KHR),
-        vk::AttachmentDescriptionBuilder::new()
-            .format(vk::Format::D32_SFLOAT)
-            .samples(vk::SampleCountFlagBits::_1)
-            .load_op(vk::AttachmentLoadOp::CLEAR)
-            .store_op(vk::AttachmentStoreOp::DONT_CARE)
-            .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
-            .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
-            .initial_layout(vk::ImageLayout::UNDEFINED)
-            .final_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-    ];
-    let depth_attach_ref = vk::AttachmentReferenceBuilder::new()
-        .attachment(1)
-        .layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+    // let attachments = vec![
+    //     vk::AttachmentDescriptionBuilder::new()
+    //         .format(format.format)
+    //         .samples(vk::SampleCountFlagBits::_1)
+    //         .load_op(vk::AttachmentLoadOp::CLEAR)
+    //         .store_op(vk::AttachmentStoreOp::STORE)
+    //         .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+    //         .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+    //         .initial_layout(vk::ImageLayout::UNDEFINED)
+    //         .final_layout(vk::ImageLayout::PRESENT_SRC_KHR),
+    //     vk::AttachmentDescriptionBuilder::new()
+    //         .format(vk::Format::D32_SFLOAT)
+    //         .samples(vk::SampleCountFlagBits::_1)
+    //         .load_op(vk::AttachmentLoadOp::CLEAR)
+    //         .store_op(vk::AttachmentStoreOp::DONT_CARE)
+    //         .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
+    //         .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
+    //         .initial_layout(vk::ImageLayout::UNDEFINED)
+    //         .final_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+    // ];
+    // let depth_attach_ref = vk::AttachmentReferenceBuilder::new()
+    //     .attachment(1)
+    //     .layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
-    let color_attachment_refs = vec![vk::AttachmentReferenceBuilder::new()
-        .attachment(0)
-        .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)];
-
-
-    let subpasses = vec![vk::SubpassDescriptionBuilder::new()
-        .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
-        .color_attachments(&color_attachment_refs)
-        .depth_stencil_attachment(&depth_attach_ref)];
+    // let color_attachment_refs = vec![vk::AttachmentReferenceBuilder::new()
+    //     .attachment(0)
+    //     .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)];
 
 
-    let dependencies = vec![vk::SubpassDependencyBuilder::new()
-        .src_subpass(vk::SUBPASS_EXTERNAL)
-        .dst_subpass(0)
-        .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-        .src_access_mask(vk::AccessFlags::empty())
-        .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-        .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)];
+    // let subpasses = vec![vk::SubpassDescriptionBuilder::new()
+    //     .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
+    //     .color_attachments(&color_attachment_refs)
+    //     .depth_stencil_attachment(&depth_attach_ref)];
 
-    let render_pass_info = vk::RenderPassCreateInfoBuilder::new()
-        .attachments(&attachments)
-        .subpasses(&subpasses)
-        .dependencies(&dependencies);
-    let render_pass = device.create_render_pass(&render_pass_info, None).unwrap();
+
+    // let dependencies = vec![vk::SubpassDependencyBuilder::new()
+    //     .src_subpass(vk::SUBPASS_EXTERNAL)
+    //     .dst_subpass(0)
+    //     .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+    //     .src_access_mask(vk::AccessFlags::empty())
+    //     .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+    //     .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)];
+
+    // let render_pass_info = vk::RenderPassCreateInfoBuilder::new()
+    //     .attachments(&attachments)
+    //     .subpasses(&subpasses)
+    //     .dependencies(&dependencies);
+    // let render_pass = device.create_render_pass(&render_pass_info, None).unwrap();
 
 
     let pipeline_info = vk::GraphicsPipelineCreateInfoBuilder::new()
@@ -293,14 +295,14 @@ pub unsafe fn pipeline_101
         .multisample_state(&multisampling)
         .color_blend_state(&color_blending)
         .layout(pipeline_layout)
-        .render_pass(render_pass)
+        .render_pass(*render_pass)
         .subpass(0);
     let pipeline = device.create_graphics_pipelines(vk::PipelineCache::null(), &[pipeline_info], None).unwrap()[0];
 
     Ok((
         pipeline,
         pipeline_layout,
-        render_pass,
+        // render_pass,
         depth_image_view,
     ))
 }
