@@ -1,7 +1,8 @@
 
 #![feature(drain_filter)]
 
-
+use super::precursors::*;
+use super::pipeline_101::*;
 
 use erupt::{
     cstr,
@@ -45,6 +46,9 @@ use winit::{
     window::WindowBuilder,
     window::Window
 };
+
+
+
 use structopt::StructOpt;
 const TITLE: &str = "vulkan-routine";
 const FRAMES_IN_FLIGHT: usize = 2;
@@ -209,7 +213,13 @@ unsafe fn routine_pure_procedural
     let surface = surface::create_surface(&instance, &window, None).unwrap();
 
 
-    let (physical_device, queue_family, format, present_mode, device_properties) = create_precursors
+    let (
+        physical_device, 
+        queue_family, 
+        format, 
+        present_mode, 
+        device_properties
+    ) = create_precursors
     (
         &instance,
         surface.clone(),
@@ -234,7 +244,6 @@ unsafe fn routine_pure_procedural
     if surface_caps.max_image_count > 0 && image_count > surface_caps.max_image_count {
         image_count = surface_caps.max_image_count;
     }
-
 
 
     let swapchain_image_extent = match surface_caps.current_extent {
@@ -323,13 +332,8 @@ unsafe fn routine_pure_procedural
         &mut vertices_terr, 
     ).unwrap();
 
-
-
     let info = vk::DescriptorSetLayoutBindingFlagsCreateInfoBuilder::new()
         .binding_flags(&[vk::DescriptorBindingFlags::empty()]);
-
-
-
 
     let samplers = [vk::Sampler::null()];
     let binding = vk::DescriptorSetLayoutBindingBuilder::new()
@@ -386,7 +390,7 @@ unsafe fn routine_pure_procedural
 
 
 
-    let scalar_33 = 100000000.0;
+    let scalar_33 = 100000.0;
     let camera_location = glm::vec3(1.0 / scalar_33, 1.0 / scalar_33, 1.0 / scalar_33);
     let image_target = glm::vec3(0.0, 0.0, 0.0);
 
@@ -489,227 +493,19 @@ unsafe fn routine_pure_procedural
 
     }
 
-
-
-
-    let depth_image_info = vk::ImageCreateInfoBuilder::new()
-        .flags(vk::ImageCreateFlags::empty())
-        .image_type(vk::ImageType::_2D)
-        .format(vk::Format::D32_SFLOAT)
-        .extent(vk::Extent3D {
-            width: swapchain_image_extent.width,
-            height: swapchain_image_extent.height,
-            depth: 1,
-        })
-        .mip_levels(1)
-        .array_layers(1)
-        .samples(vk::SampleCountFlagBits::_1)
-        .tiling(vk::ImageTiling::OPTIMAL)
-        .usage(vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT)
-        .sharing_mode(vk::SharingMode::EXCLUSIVE)
-        .queue_family_indices(&[0])
-        .initial_layout(vk::ImageLayout::UNDEFINED);
-
-    let depth_image = device.create_image(&depth_image_info, None)
-            .expect("Failed to create depth (texture) Image.");   
-
-    let dpth_img_mem_reqs = device.get_image_memory_requirements(depth_image);
-    let dpth_img_mem_info = vk::MemoryAllocateInfoBuilder::new()
-        .memory_type_index(1)
-        .allocation_size(dpth_img_mem_reqs.size);
-    let depth_image_memory = device.allocate_memory(&dpth_img_mem_info, None)
-        .expect("Failed to alloc mem for depth image.");
-
-    device.bind_image_memory(depth_image, depth_image_memory, 0)
-        .expect("Failed to bind depth image memory.");
     
-    
-    let depth_image_view_info = vk::ImageViewCreateInfoBuilder::new()
-        .flags(vk::ImageViewCreateFlags::empty())
-        .image(depth_image)
-        .view_type(vk::ImageViewType::_2D)
-        .format(vk::Format::D32_SFLOAT)
-        .components(vk::ComponentMapping {
-            r: vk::ComponentSwizzle::IDENTITY,
-            g: vk::ComponentSwizzle::IDENTITY,
-            b: vk::ComponentSwizzle::IDENTITY,
-            a: vk::ComponentSwizzle::IDENTITY,
-        })
-        .subresource_range(vk::ImageSubresourceRange {
-            aspect_mask: vk::ImageAspectFlags::DEPTH,
-            base_mip_level: 0,
-            level_count: 1,
-            base_array_layer: 0,
-            layer_count: 1,
-        });
+    let (
+        pipeline,
+        pipeline_layout,
+        render_pass,
+        depth_image_view,
+    ) = pipeline_101
+    (
+        &device,
+        &format,
+        &swapchain_image_extent,
+    ).unwrap();
 
-    let depth_image_view = device.create_image_view(&depth_image_view_info, None)
-        .expect("Failed to create image view.");
-
-    let entry_point = CString::new("main").unwrap();
-    let vert_decoded = utils::decode_spv(SHADER_VERT).unwrap();
-    let module_info = vk::ShaderModuleCreateInfoBuilder::new().code(&vert_decoded);
-    let shader_vert = device.create_shader_module(&module_info, None).unwrap();
-    let frag_decoded = utils::decode_spv(SHADER_FRAG).unwrap();
-    let module_info = vk::ShaderModuleCreateInfoBuilder::new().code(&frag_decoded);
-    let shader_frag = device.create_shader_module(&module_info, None).unwrap();
-    let shader_stages = vec![
-        vk::PipelineShaderStageCreateInfoBuilder::new()
-            .stage(vk::ShaderStageFlagBits::VERTEX)
-            .module(shader_vert)
-            .name(&entry_point),
-        vk::PipelineShaderStageCreateInfoBuilder::new()
-            .stage(vk::ShaderStageFlagBits::FRAGMENT)
-            .module(shader_frag)
-            .name(&entry_point),
-    ];
-    let vertex_buffer_bindings_desc_info = vk::VertexInputBindingDescriptionBuilder::new()
-        .binding(0)
-        .stride(std::mem::size_of::<VertexV3>() as u32)
-        .input_rate(vk::VertexInputRate::VERTEX);
-    let vert_buff_att_desc_info_pos = vk::VertexInputAttributeDescriptionBuilder::new()
-        .location(0)
-        .binding(0)
-        .format(vk::Format::R32G32B32A32_SFLOAT)
-        .offset(offset_of!(VertexV3, pos) as u32,);
-    let vert_buff_att_desc_info_color = vk::VertexInputAttributeDescriptionBuilder::new()
-        .location(1)
-        .binding(0)
-        .format(vk::Format::R32G32B32A32_SFLOAT)
-        .offset(offset_of!(VertexV3, color) as u32,);
-    let vertex_input = vk::PipelineVertexInputStateCreateInfoBuilder::new()
-        .flags(vk::PipelineVertexInputStateCreateFlags::empty())
-        .vertex_binding_descriptions(&[vertex_buffer_bindings_desc_info])
-        .vertex_attribute_descriptions(&[vert_buff_att_desc_info_pos, vert_buff_att_desc_info_color])
-        .build_dangling();
-    let input_assembly = vk::PipelineInputAssemblyStateCreateInfoBuilder::new()
-        .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-        .primitive_restart_enable(false);
-    let viewports = vec![vk::ViewportBuilder::new()
-        .x(0.0)
-        .y(0.0)
-        .width(swapchain_image_extent.width as f32)
-        .height(swapchain_image_extent.height as f32)
-        .min_depth(0.0)
-        .max_depth(1.0)];
-    let scissors = vec![vk::Rect2DBuilder::new()
-        .offset(vk::Offset2D { x: 0, y: 0 })
-        .extent(swapchain_image_extent)];
-    let viewport_state = vk::PipelineViewportStateCreateInfoBuilder::new()
-        .viewports(&viewports)
-        .scissors(&scissors);
-    let rasterizer = vk::PipelineRasterizationStateCreateInfoBuilder::new()
-        .depth_clamp_enable(true)
-        .rasterizer_discard_enable(false)
-        .polygon_mode(vk::PolygonMode::LINE)
-        .line_width(1.0)
-        .cull_mode(vk::CullModeFlags::NONE)
-        .front_face(vk::FrontFace::COUNTER_CLOCKWISE);
-    let multisampling = vk::PipelineMultisampleStateCreateInfoBuilder::new()
-        .sample_shading_enable(false)
-        .rasterization_samples(vk::SampleCountFlagBits::_1);
-    let color_blend_attachments = vec![vk::PipelineColorBlendAttachmentStateBuilder::new()
-        .color_write_mask(
-            vk::ColorComponentFlags::R
-                | vk::ColorComponentFlags::G
-                | vk::ColorComponentFlags::B
-                | vk::ColorComponentFlags::A,
-        )
-        .blend_enable(false)];
-    let color_blending = vk::PipelineColorBlendStateCreateInfoBuilder::new()
-        .logic_op_enable(false)
-        .attachments(&color_blend_attachments);
-
-    let pipeline_stencil_info = vk::PipelineDepthStencilStateCreateInfoBuilder::new()
-        .depth_test_enable(false)
-        .depth_write_enable(true)
-        .depth_compare_op(vk::CompareOp::LESS)
-        .depth_bounds_test_enable(false)
-        .min_depth_bounds(0.0)
-        .max_depth_bounds(1.0)
-        .front(vk::StencilOpStateBuilder::new().build())
-        .back(vk::StencilOpStateBuilder::new().build());
-
-    let desc_layouts_slc = &[descriptor_set_layout];
-
-
-    let push_constant_range = vk::PushConstantRangeBuilder::new()
-        .stage_flags(vk::ShaderStageFlags::VERTEX)
-        .offset(0)
-        .size(std::mem::size_of::<glm::Mat4>() as u32);
-    let slice = [push_constant_range];
-
-    
-
-    let pipeline_layout_info = vk::PipelineLayoutCreateInfoBuilder::new()
-        .set_layouts(desc_layouts_slc)
-        .push_constant_ranges(&slice);
-
-
-    let pipeline_layout = device.create_pipeline_layout(&pipeline_layout_info, None).unwrap();
-    let attachments = vec![
-        vk::AttachmentDescriptionBuilder::new()
-            .format(format.format)
-            .samples(vk::SampleCountFlagBits::_1)
-            .load_op(vk::AttachmentLoadOp::CLEAR)
-            .store_op(vk::AttachmentStoreOp::STORE)
-            .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
-            .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
-            .initial_layout(vk::ImageLayout::UNDEFINED)
-            .final_layout(vk::ImageLayout::PRESENT_SRC_KHR),
-        vk::AttachmentDescriptionBuilder::new()
-            .format(vk::Format::D32_SFLOAT)
-            .samples(vk::SampleCountFlagBits::_1)
-            .load_op(vk::AttachmentLoadOp::CLEAR)
-            .store_op(vk::AttachmentStoreOp::DONT_CARE)
-            .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
-            .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
-            .initial_layout(vk::ImageLayout::UNDEFINED)
-            .final_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-    ];
-    let depth_attach_ref = vk::AttachmentReferenceBuilder::new()
-        .attachment(1)
-        .layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-
-    let color_attachment_refs = vec![vk::AttachmentReferenceBuilder::new()
-        .attachment(0)
-        .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)];
-
-
-    let subpasses = vec![vk::SubpassDescriptionBuilder::new()
-        .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
-        .color_attachments(&color_attachment_refs)
-        .depth_stencil_attachment(&depth_attach_ref)];
-
-
-    let dependencies = vec![vk::SubpassDependencyBuilder::new()
-        .src_subpass(vk::SUBPASS_EXTERNAL)
-        .dst_subpass(0)
-        .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-        .src_access_mask(vk::AccessFlags::empty())
-        .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-        .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)];
-
-    let render_pass_info = vk::RenderPassCreateInfoBuilder::new()
-        .attachments(&attachments)
-        .subpasses(&subpasses)
-        .dependencies(&dependencies);
-    let render_pass = device.create_render_pass(&render_pass_info, None).unwrap();
-
-   
-    let pipeline_info = vk::GraphicsPipelineCreateInfoBuilder::new()
-        .stages(&shader_stages)
-        .vertex_input_state(&vertex_input)
-        .input_assembly_state(&input_assembly)
-        .depth_stencil_state(&pipeline_stencil_info)
-        .viewport_state(&viewport_state)
-        .rasterization_state(&rasterizer)
-        .multisample_state(&multisampling)
-        .color_blend_state(&color_blending)
-        .layout(pipeline_layout)
-        .render_pass(render_pass)
-        .subpass(0);
-    let pipeline = device.create_graphics_pipelines(vk::PipelineCache::null(), &[pipeline_info], None).unwrap()[0];
     let swapchain_framebuffers: Vec<_> = swapchain_image_views
         .iter()
         .map(|image_view| {
@@ -730,15 +526,7 @@ unsafe fn routine_pure_procedural
         .command_buffer_count(swapchain_framebuffers.len() as _);
     let cmd_bufs = device.allocate_command_buffers(&cmd_buf_allocate_info).unwrap();
 
-
-
-
     let now = Instant::now();
-
-
-
-
-
 
     let semaphore_info = vk::SemaphoreCreateInfoBuilder::new();
     let image_available_semaphores: Vec<_> = (0..FRAMES_IN_FLIGHT)
@@ -754,16 +542,7 @@ unsafe fn routine_pure_procedural
     let mut images_in_flight: Vec<_> = swapchain_images.iter().map(|_| vk::Fence::null()).collect();
     let mut frame = 0;
 
-
-
-
     let mut button_push: [bool; 2] = [false; 2];
-
-
-
-
-
-
 
     let mut control_input = ControlInput {
         roll: 0,
@@ -1367,6 +1146,10 @@ unsafe fn render_pipeline_202
 
 
 
+
+
+
+
 // Tesselation shader
 // Secondary command buffer recorded on separate thread.
 // Legacy rasterization.
@@ -1379,127 +1162,6 @@ unsafe fn render_pipeline_688
 {
     Ok(())
 }
-
-
-
-
-// Cubes,
-// Scissors
-// Multiscene renders.
-
-
-
-
-
-
-
-
-
-unsafe fn create_precursors
-<'a>
-(
-    instance: &InstanceLoader,
-    surface: vk::SurfaceKHR,
-)
--> Result<(vk::PhysicalDevice, u32, vk::SurfaceFormatKHR, vk::PresentModeKHR, vk::PhysicalDeviceProperties), &'a str>
-{
-    let device_extensions = vec![  // trying to type the contents of this vector to be able to pass between functions..todo.
-        vk::KHR_SWAPCHAIN_EXTENSION_NAME,
-        vk::KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
-        vk::KHR_RAY_QUERY_EXTENSION_NAME,
-        vk::KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
-        vk::KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
-        vk::KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME,
-        vk::KHR_SPIRV_1_4_EXTENSION_NAME,
-        vk::KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
-        vk::EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
-    ];
-
-    let (physical_device, queue_family, format, present_mode, device_properties) =
-
-    instance.enumerate_physical_devices(None)
-    .unwrap()
-    .into_iter()
-    .filter_map(|physical_device| {
-        let queue_family = match instance
-            .get_physical_device_queue_family_properties(physical_device, None)
-            .into_iter()
-            .enumerate()
-            .position(|(i, queue_family_properties)| {
-                queue_family_properties
-                    .queue_flags
-                    .contains(vk::QueueFlags::GRAPHICS)
-                    // (
-                    //     .contains(vk::QueueFlags::GRAPHICS)
-                    //     && .contains(vk::QueueFlags::TRANSFER)
-                    // )
-                    // .contains(vk::QueueFlags::TRANSFER)
-                    && instance
-                        .get_physical_device_surface_support_khr(
-                            physical_device,
-                            i as u32,
-                            surface,
-                        )
-                        .unwrap()
-            }) {
-            Some(queue_family) => queue_family as u32,
-            None => return None,
-        };
-        let formats = instance
-            .get_physical_device_surface_formats_khr(physical_device, surface, None)
-            .unwrap();
-        let format = match formats
-            .iter()
-            .find(|surface_format| {
-                (surface_format.format == vk::Format::B8G8R8A8_SRGB
-                    || surface_format.format == vk::Format::R8G8B8A8_SRGB)
-                    && surface_format.color_space == vk::ColorSpaceKHR::SRGB_NONLINEAR_KHR
-            })
-            .or_else(|| formats.get(0))
-        {
-            Some(surface_format) => *surface_format,
-            None => return None,
-        };
-        let present_mode = instance
-            .get_physical_device_surface_present_modes_khr(physical_device, surface, None)
-            .unwrap()
-            .into_iter()
-            .find(|present_mode| present_mode == &vk::PresentModeKHR::MAILBOX_KHR)
-            .unwrap_or(vk::PresentModeKHR::FIFO_KHR);
-        let supported_device_extensions = instance
-            .enumerate_device_extension_properties(physical_device, None, None)
-            .unwrap();
-        let device_extensions_supported =
-            device_extensions.iter().all(|device_extension| {
-                let device_extension = CStr::from_ptr(*device_extension);
-
-                supported_device_extensions.iter().any(|properties| {
-                    CStr::from_ptr(properties.extension_name.as_ptr()) == device_extension
-                })
-            });
-        if !device_extensions_supported {
-            return None;
-        }
-        let device_properties = instance.get_physical_device_properties(physical_device);
-        Some((
-            physical_device,
-            queue_family,
-            format,
-            present_mode,
-            device_properties,
-        ))
-    })
-    .max_by_key(|(_, _, _, _, properties)| match properties.device_type {
-        vk::PhysicalDeviceType::DISCRETE_GPU => 2,
-        vk::PhysicalDeviceType::INTEGRATED_GPU => 1,
-        _ => 0,
-    })
-    .expect("No suitable physical device found");
-
-    Ok((physical_device, queue_family, format, present_mode, device_properties))
-
-}
-
 
 // There are 16k vertices in that mesh, which is killing our card with naive pipeline, 
 // no multithreading, etc.  Simple function takes the indices list and just chops two out of every
@@ -1531,6 +1193,9 @@ fn mesh_cull_9945
 
 
 
+
+
+
 fn transform_camera
 <'a>
 (
@@ -1540,45 +1205,21 @@ fn transform_camera
 )
 -> Result <(), &'a str>
 {
- 
     let scalar_45 = 0.03;
-
-
-
-    // let something = glm::rotate(&)
-
-
-
-
-    // This is wrong.  It isn't the view matrix we want to rotate, it's the attitude of the camera.
-    // Reflexively, we mutate the pitch axis by the 
-
-
     // We are getting quantized packets of inputs, if they were big enough batches we'd ahve to interleave the operations to 
     // parody instantaneous parallel control inputs.  much yaw followed by much pitch is not the same as both applied simultaneously.
-
-
     camera.attitude.roll_axis_normal = glm::rotate_vec3(&camera.attitude.roll_axis_normal, (control_input.pitch as f32) 
         * scalar_45, &camera.attitude.pitch_axis_normal);
     camera.attitude.roll_axis_normal = glm::rotate_vec3(&camera.attitude.roll_axis_normal, (control_input.yaw as f32) 
         * scalar_45, &camera.attitude.yaw_axis_normal);
-
     camera.attitude.pitch_axis_normal = glm::rotate_vec3(&camera.attitude.pitch_axis_normal, (control_input.roll as f32) 
         * scalar_45, &camera.attitude.roll_axis_normal);
     camera.attitude.pitch_axis_normal = glm::rotate_vec3(&camera.attitude.pitch_axis_normal, (control_input.yaw as f32) 
         * scalar_45, &camera.attitude.yaw_axis_normal);
-
     camera.attitude.yaw_axis_normal = glm::rotate_vec3(&camera.attitude.yaw_axis_normal, (control_input.roll as f32) 
         * scalar_45, &camera.attitude.roll_axis_normal);
     camera.attitude.yaw_axis_normal = glm::rotate_vec3(&camera.attitude.yaw_axis_normal, (control_input.pitch as f32) 
         * scalar_45, &camera.attitude.pitch_axis_normal);
-
-
-    // So now we've got the attitude right, but our look_at point is no longer valid, and direct rotation of the view_matrix simply reveals ignorance about what the view matrix is based around.   Our roll axis normal however gives us the direction of our looking.  We may just need to add onto it.
-    // Rather, the camera.position + roll_axis_narmal wouldr give look_at point.
-
-    let new_image_target = camera.position + camera.attitude.roll_axis_normal;
-    // the up vector is still the pitch vector
 
     *view_matrix = glm::look_at::<f32>
     (
@@ -1586,18 +1227,6 @@ fn transform_camera
         &(&camera.position + &camera.attitude.roll_axis_normal),
         &camera.attitude.yaw_axis_normal,
     );
-
-
-    // *view_matrix = glm::rotate(&view_matrix, (control_input.roll as f32) * scalar_45, &camera.attitude.roll_axis_normal);
-    // *view_matrix = glm::rotate(&view_matrix, (control_input.pitch as f32) * scalar_45, &camera.attitude.pitch_axis_normal);
-    // *view_matrix = glm::rotate(&view_matrix, (control_input.yaw as f32) * scalar_45, &camera.attitude.yaw_axis_normal);
-
-
-
-    // This still seems fucky, could have something to do with the parallax of the viewport, but I'm seeing skew, It's hard to tell with just the one terrain object what is the scale.
-
-    // I'm probably going about all of this in a very newbie way.  A lot of finding more optimal routes to these calculations, plus the scheduling of the command buffer recording off-thread.
-
 
     *control_input = ControlInput {
         roll: 0,
@@ -1612,12 +1241,30 @@ fn transform_camera
 
 
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+struct Attitude {
+    // logically, the third axis normal can be derived from the other two, memoization indicates the third.
+    roll_axis_normal: glm::Vec3,  // forward axis normal.
+    pitch_axis_normal: glm::Vec3, // right axis normal
+    yaw_axis_normal: glm::Vec3, // up axis normal
+}
+
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+struct Camera {
+    attitude: Attitude,
+    position: glm::Vec3,
+}
+
+
+
 
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
 
     #[test]
     fn test_camera() {
@@ -1645,21 +1292,3 @@ mod tests {
 
 
 
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-struct Attitude {
-    // logically, the third axis normal can be derived from the other two, memoization indicates the third.
-    roll_axis_normal: glm::Vec3,
-    pitch_axis_normal: glm::Vec3,
-    yaw_axis_normal: glm::Vec3,
-}
-
-
-
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-struct Camera {
-    attitude: Attitude,
-    position: glm::Vec3,
-}

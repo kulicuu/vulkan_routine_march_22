@@ -4,6 +4,8 @@
 
 mod backup;
 mod vulkan_6300;
+mod precursors;
+mod pipeline_101;
 
 
 use backup::*;
