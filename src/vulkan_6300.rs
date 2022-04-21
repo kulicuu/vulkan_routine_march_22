@@ -634,7 +634,8 @@ unsafe fn routine_pure_procedural
         &command_pool,
         &device,
         &render_pass,
-        &swapchain_framebuffers
+        &swapchain_framebuffers,
+        pipeline_grid,
     ).unwrap();
 
 
@@ -1205,7 +1206,7 @@ unsafe fn update_secondary_command_buffer
     device: &erupt::DeviceLoader,
     render_pass: &vk::RenderPass,
     framebuffers: &[vk::Framebuffer],
-    pipeline: &vk::Pipeline,  // this is the pipeline with primitive topology of line lisnt.
+    pipeline: vk::Pipeline,  // this is the pipeline with primitive topology of line lisnt.
 
 )
 -> Result<
@@ -1236,7 +1237,7 @@ unsafe fn update_secondary_command_buffer
     device.cmd_bind_pipeline(cb, vk::PipelineBindPoint::GRAPHICS, pipeline);
 
     // now we need to bind the vertices for this pipeline. We have somewhere a set of line vertices we should bind to this pipeline.
-    
+
 
 
 
