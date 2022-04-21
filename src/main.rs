@@ -5,6 +5,7 @@
 mod vulkan_6300;
 mod precursors;
 mod pipeline_101;
+mod pipeline_102;
 
 
 use vulkan_6300::*;

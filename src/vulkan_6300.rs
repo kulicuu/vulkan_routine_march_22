@@ -3,6 +3,7 @@
 
 use super::precursors::*;
 use super::pipeline_101::*;
+use super::pipeline_102::*;
 
 use erupt::{
     cstr,
@@ -93,8 +94,6 @@ struct Opt {
     validation_layers: bool,
 }
 
-
-
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 struct OldCamera {
@@ -147,12 +146,13 @@ unsafe fn routine_pure_procedural
 ()
 {
     
-    let opt = Opt { validation_layers: true };
+    let opt = Opt { validation_layers: false };
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
         .with_title(TITLE)
         .with_resizable(false)
-        .with_maximized(true)
+        // .with_maximized(true)
+        
         .build(&event_loop)
         .unwrap();
     let entry = Arc::new(EntryLoader::new().unwrap());
@@ -311,6 +311,31 @@ unsafe fn routine_pure_procedural
 
     let (mut vertices_terr, mut indices_terr) = load_model().unwrap();
 
+
+    let grid_factor = 10;
+    let grid_resolution = 2.0 / grid_factor as f32;
+
+    let mut vertices_grid = vec![];
+    for idx in 0..grid_factor {
+        for jdx in 0..grid_factor {
+            for kdx in 0..grid_factor {
+                let vertex = VertexV3 {
+                    pos: [
+                        -2.0 + (grid_resolution * (idx as f32)),
+                        -2.0 + (grid_resolution * (jdx as f32)),
+                        -2.0 + (grid_resolution * (kdx as f32)),
+                        -1.0,
+                    ],
+                    color: [0.13, 0.320, 0.80, 0.20],
+                };
+                vertices_grid.push(vertex);
+            }
+        }
+    }
+
+
+
+
     let physical_device_memory_properties = instance.get_physical_device_memory_properties(physical_device);
 
 
@@ -331,6 +356,15 @@ unsafe fn routine_pure_procedural
         command_pool,
         &mut vertices_terr, 
     ).unwrap();
+
+
+    let vb_grid = buffer_vertices
+    (
+        &device,
+        queue,
+        command_pool,
+        &mut vertices_grid,
+    );
 
     let info = vk::DescriptorSetLayoutBindingFlagsCreateInfoBuilder::new()
         .binding_flags(&[vk::DescriptorBindingFlags::empty()]);
@@ -557,6 +591,21 @@ unsafe fn routine_pure_procedural
         &swapchain_image_extent,
     ).unwrap();
 
+
+
+    let (
+        pipeline_grid,
+        pipeline_layout_grid,
+        depth_image_view_grid,
+    ) = pipeline_102
+    (
+        &device,
+        &render_pass.clone(),
+        &format,
+        &swapchain_image_extent,
+    ).unwrap();
+
+
     let swapchain_framebuffers: Vec<_> = swapchain_image_views
         .iter()
         .map(|image_view| {
@@ -677,7 +726,7 @@ unsafe fn routine_pure_procedural
 
 
             button_push[frame] = false;
-
+ 
 
 
 
@@ -892,10 +941,8 @@ pub fn load_model
 
 
     println!("\n\nBefore {}", indices_terr.len());
-
     indices_terr = mesh_cull_9945(indices_terr).unwrap();
     println!("After: {}\n\n", indices_terr.len());
-
     Ok((vertices_terr, indices_terr))
 }
 
@@ -972,6 +1019,17 @@ unsafe fn buffer_indices
     Ok(ib)
 }
 
+
+
+// unsafe fn buffer_grid_vertices
+// <'a>
+// (
+
+// )
+// -> Result<(vk::Buffer), &'a str>
+// {
+
+// }
 
 unsafe fn buffer_vertices
 <'a>
@@ -1238,7 +1296,7 @@ fn mesh_cull_9945
     // }
 
 
-    indices.drain(12000..);
+    indices.drain(18000..);
     Ok(indices)
 }
 

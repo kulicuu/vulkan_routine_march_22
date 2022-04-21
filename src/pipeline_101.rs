@@ -1,7 +1,5 @@
 // PIpeline 101 is a basic pipeline used for main render, terrain render program.
 
-
-
 use erupt::{
     cstr,
     utils::{self, surface},
@@ -33,7 +31,6 @@ use smallvec::SmallVec;
 use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 use memoffset::offset_of;
 
-
 const SHADER_VERT: &[u8] = include_bytes!("../spv/s_400_.vert.spv");
 const SHADER_FRAG: &[u8] = include_bytes!("../spv/s1.frag.spv");
 
@@ -55,7 +52,6 @@ pub unsafe fn pipeline_101
 -> Result<(
         vk::Pipeline,
         vk::PipelineLayout,
-        // vk::RenderPass,
         vk::ImageView,
     ), 
     &'a str>
@@ -107,7 +103,6 @@ pub unsafe fn pipeline_101
 
     device.bind_image_memory(depth_image, depth_image_memory, 0)
         .expect("Failed to bind depth image memory.");
-    
     
     let depth_image_view_info = vk::ImageViewCreateInfoBuilder::new()
         .flags(vk::ImageViewCreateFlags::empty())
@@ -217,73 +212,17 @@ pub unsafe fn pipeline_101
 
     let desc_layouts_slc = &[descriptor_set_layout];
 
-
     let push_constant_range = vk::PushConstantRangeBuilder::new()
         .stage_flags(vk::ShaderStageFlags::VERTEX)
         .offset(0)
         .size(std::mem::size_of::<glm::Mat4>() as u32);
     let slice = [push_constant_range];
 
-
-
-
-
-
     let pipeline_layout_info = vk::PipelineLayoutCreateInfoBuilder::new()
     .set_layouts(desc_layouts_slc)
     .push_constant_ranges(&slice);
 
-
     let pipeline_layout = device.create_pipeline_layout(&pipeline_layout_info, None).unwrap();
-    // let attachments = vec![
-    //     vk::AttachmentDescriptionBuilder::new()
-    //         .format(format.format)
-    //         .samples(vk::SampleCountFlagBits::_1)
-    //         .load_op(vk::AttachmentLoadOp::CLEAR)
-    //         .store_op(vk::AttachmentStoreOp::STORE)
-    //         .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
-    //         .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
-    //         .initial_layout(vk::ImageLayout::UNDEFINED)
-    //         .final_layout(vk::ImageLayout::PRESENT_SRC_KHR),
-    //     vk::AttachmentDescriptionBuilder::new()
-    //         .format(vk::Format::D32_SFLOAT)
-    //         .samples(vk::SampleCountFlagBits::_1)
-    //         .load_op(vk::AttachmentLoadOp::CLEAR)
-    //         .store_op(vk::AttachmentStoreOp::DONT_CARE)
-    //         .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
-    //         .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
-    //         .initial_layout(vk::ImageLayout::UNDEFINED)
-    //         .final_layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
-    // ];
-    // let depth_attach_ref = vk::AttachmentReferenceBuilder::new()
-    //     .attachment(1)
-    //     .layout(vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
-
-    // let color_attachment_refs = vec![vk::AttachmentReferenceBuilder::new()
-    //     .attachment(0)
-    //     .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)];
-
-
-    // let subpasses = vec![vk::SubpassDescriptionBuilder::new()
-    //     .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
-    //     .color_attachments(&color_attachment_refs)
-    //     .depth_stencil_attachment(&depth_attach_ref)];
-
-
-    // let dependencies = vec![vk::SubpassDependencyBuilder::new()
-    //     .src_subpass(vk::SUBPASS_EXTERNAL)
-    //     .dst_subpass(0)
-    //     .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-    //     .src_access_mask(vk::AccessFlags::empty())
-    //     .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-    //     .dst_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)];
-
-    // let render_pass_info = vk::RenderPassCreateInfoBuilder::new()
-    //     .attachments(&attachments)
-    //     .subpasses(&subpasses)
-    //     .dependencies(&dependencies);
-    // let render_pass = device.create_render_pass(&render_pass_info, None).unwrap();
-
 
     let pipeline_info = vk::GraphicsPipelineCreateInfoBuilder::new()
         .stages(&shader_stages)
@@ -302,7 +241,6 @@ pub unsafe fn pipeline_101
     Ok((
         pipeline,
         pipeline_layout,
-        // render_pass,
         depth_image_view,
     ))
 }
