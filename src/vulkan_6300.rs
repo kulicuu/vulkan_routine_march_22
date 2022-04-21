@@ -577,8 +577,6 @@ unsafe fn routine_pure_procedural
         .dependencies(&dependencies);
     let render_pass = device.create_render_pass(&render_pass_info, None).unwrap();
 
-
-    
     let (
         pipeline,
         pipeline_layout,
@@ -625,6 +623,25 @@ unsafe fn routine_pure_procedural
         .level(vk::CommandBufferLevel::PRIMARY)
         .command_buffer_count(swapchain_framebuffers.len() as _);
     let cmd_bufs = device.allocate_command_buffers(&cmd_buf_allocate_info).unwrap();
+
+
+
+
+
+
+    let cb_2 = update_secondary_command_buffer
+    (
+        &command_pool,
+        &device,
+        &render_pass,
+        &swapchain_framebuffers
+    ).unwrap();
+
+
+
+
+
+
 
     let now = Instant::now();
 
@@ -758,6 +775,10 @@ unsafe fn routine_pure_procedural
                 ib,
                 push_constant,
             );
+
+
+
+
             let command_buffers = [command_buffer];
             let signal_semaphores = vec![render_finished_semaphores[frame]];
             let submit_info = vk::SubmitInfoBuilder::new()
@@ -1150,6 +1171,80 @@ fn find_bad_tri
 }
 
 
+// this will record the secondary command buffer which uses pipeline_102
+// to make the grid pattern.
+// aka update_secondary_command_buffer
+
+// unsafe fn record_cb_113
+// <'a>
+// (
+//     command_buffer: vk::CommandBuffer,
+//     device: &erupt::DeviceLoader,
+//     render_pass: vk::RenderPass,
+//     framebuffer: vk::Framebuffer,
+//     swapchain_image_extent: vk::Extent2D,
+//     pipeline: vk::Pipeline,
+//     pipeline_layout: vk::PipelineLayout,
+//     vb: vk::Buffer,
+// )
+// -> Result<(), &'a str>
+// {
+
+//     let info = vk::CommandBufferAllocateInfoBuilder::new()
+//         .command_pool(command)
+
+
+//     Ok(())
+// }
+
+// this will only be called once in this grid case, because the grid is not moved.
+unsafe fn update_secondary_command_buffer
+<'a>
+(
+    command_pool: &vk::CommandPool,
+    device: &erupt::DeviceLoader,
+    render_pass: &vk::RenderPass,
+    framebuffers: &[vk::Framebuffer],
+    pipeline: &vk::Pipeline,  // this is the pipeline with primitive topology of line lisnt.
+
+)
+-> Result<
+    vk::CommandBuffer
+, &'a str>
+{
+
+    let info = vk::CommandBufferAllocateInfoBuilder::new()
+        .command_pool(*command_pool)
+        .level(vk::CommandBufferLevel::SECONDARY)
+        .command_buffer_count(1);
+    let cb = device.allocate_command_buffers(&info).unwrap()[0];
+
+
+    let inheritance_info = vk::CommandBufferInheritanceInfoBuilder::new()
+        .render_pass(*render_pass)
+        .subpass(0)
+        .framebuffer(framebuffers[0]);
+
+
+
+    let info = vk::CommandBufferBeginInfoBuilder::new()
+        .flags(vk::CommandBufferUsageFlags::RENDER_PASS_CONTINUE)
+        .inheritance_info(&inheritance_info);
+
+    device.begin_command_buffer(cb, &info).unwrap();
+
+    device.cmd_bind_pipeline(cb, vk::PipelineBindPoint::GRAPHICS, pipeline);
+
+    // now we need to bind the vertices for this pipeline. We have somewhere a set of line vertices we should bind to this pipeline.
+    
+
+
+
+    Ok(cb)
+
+
+}
+
 unsafe fn record_cb_111
 <'a>
 (
@@ -1191,7 +1286,6 @@ unsafe fn record_cb_111
             extent: swapchain_image_extent,
         })
         .clear_values(&clear_values);
-    
     device.cmd_begin_render_pass(
         command_buffer,
         &render_pass_begin_info,
@@ -1201,11 +1295,7 @@ unsafe fn record_cb_111
     device.cmd_bind_index_buffer(command_buffer, ib, 0, vk::IndexType::UINT32);
     device.cmd_bind_vertex_buffers(command_buffer, 0, &[vb], &[0]);
     device.cmd_bind_descriptor_sets(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline_layout, 0, &d_sets, &[]);
-
-
-
     let ptr = std::ptr::addr_of!(push_constant.view) as *const c_void;
-
     device.cmd_push_constants
     (
         command_buffer,
@@ -1215,19 +1305,11 @@ unsafe fn record_cb_111
         std::mem::size_of::<PushConstants>() as u32,
         ptr,
     );
-
-
-
     device.cmd_draw_indexed(command_buffer, (indices_terr.len()) as u32, ((indices_terr.len()) / 3) as u32, 0, 0, 0);
     device.cmd_end_render_pass(command_buffer);
     device.end_command_buffer(command_buffer).unwrap();
-
-
     Ok(())
 }
-
-
-
 
 unsafe fn render_pipeline_orig
 <'a>
