@@ -637,12 +637,39 @@ unsafe fn routine_pure_procedural
         .command_buffer_count(swapchain_framebuffers.len() as _);
     let cmd_bufs = device.allocate_command_buffers(&cmd_buf_allocate_info).unwrap();
 
+
+
+
+
     
     let cb_2_info = vk::CommandBufferAllocateInfoBuilder::new()
         .command_pool(command_pool)
         .level(vk::CommandBufferLevel::SECONDARY)
         .command_buffer_count(swapchain_framebuffers.len() as _);
     let cb_2s = device.allocate_command_buffers(&cb_2_info).unwrap();
+
+
+
+    let mut primary_command_buffers: Vec<vk::CommandBuffer> = vec![];
+
+    let mut secondary_command_buffers: Vec<vk::CommandBuffer> = vec![];
+
+
+    for img_idx in 0..swapchain_framebuffers.len() {
+        let primary_cb_alloc_info = vk::CommandBufferAllocateInfoBuilder::new()
+            .command_pool(command_pools[img_idx])
+            .level(vk::CommandBufferLevel::PRIMARY)
+            .command_buffer_count(1);
+        primary_command_buffers.push(device.allocate_command_buffers(&primary_cb_alloc_info).unwrap()[0]);
+
+        let secondary_cb_alloc_info = vk::CommandBufferAllocateInfoBuilder::new()
+            .command_pool(command_pools[img_idx])
+            .level(vk::CommandBufferLevel::SECONDARY)
+            .command_buffer_count(1);
+        secondary_command_buffers.push(device.allocate_command_buffers(&secondary_cb_alloc_info).unwrap()[0]);
+    }
+
+
 
 
 
@@ -779,6 +806,11 @@ unsafe fn routine_pure_procedural
 
 
 
+            let command_pool = command_pools[image_index as usize];
+
+
+
+
 
 
 
@@ -787,8 +819,34 @@ unsafe fn routine_pure_procedural
             let framebuffer = swapchain_framebuffers[image_index as usize];
 
 
+
+            record_cb_218
+            (
+                &device,
+                render_pass,
+                command_pool,
+                pipeline, // primary_pipeline,
+                pipeline_layout,
+                pipeline_grid, // secondary pipeline for the grid draw.
+                pipeline_layout_grid,
+                &mut primary_command_buffers,
+                &mut secondary_command_buffers,
+                // &primary_command_buffers[image_index as usize],
+                // &secondary_command_buffers[image_index as usize],
+                &framebuffer,
+                image_index,
+                swapchain_image_extent,
+                &indices_terr,
+                d_sets.clone(),
+                vb,
+                vb_grid,
+                ib,
+                push_constant,
+            );
+
             record_cb_111
             (
+                command_pool,
                 command_buffer,
                 cb_2,
                 &device,
@@ -1305,9 +1363,117 @@ unsafe fn update_secondary_command_buffer // for the grid render, should rename 
     Ok(cb)
 }
 
+
+unsafe fn record_cb_218
+<'a>
+(
+    device: &erupt::DeviceLoader,
+    render_pass: vk::RenderPass,
+    command_pool: vk::CommandPool,
+    primary_pipeline: vk::Pipeline,
+    primary_pipeline_layout: vk::PipelineLayout,
+    grid_pipeline: vk::Pipeline, // secondary pipeline
+    grid_pipeline_layout: vk::PipelineLayout,
+    primary_command_buffers: &mut Vec<vk::CommandBuffer>,
+    secondary_command_buffers: &mut Vec<vk::CommandBuffer>,
+    // primary_command_buffer: &vk::CommandBuffer,
+    // secondary_command_buffer: &vk::CommandBuffer,
+    framebuffer: &vk::Framebuffer,
+    image_index: u32,
+    swapchain_image_extent: vk::Extent2D,
+    indices_terr: &Vec<u32>,
+    d_sets: erupt::SmallVec<vk::DescriptorSet>,
+    vb: vk::Buffer,
+    vb_grid: vk::Buffer,
+    ib: vk::Buffer,
+    push_constant: PushConstants,
+)
+-> Result<(), &'a str>
+{
+
+
+    device.reset_command_pool(command_pool, vk::CommandPoolResetFlags::empty()).unwrap();
+
+
+    let allocate_info = vk::CommandBufferAllocateInfoBuilder::new()
+        .command_pool(command_pool)
+        .level(vk::CommandBufferLevel::PRIMARY)
+        .command_buffer_count(1);
+
+    let primary_cb = device.allocate_command_buffers(&allocate_info).unwrap()[0];
+    primary_command_buffers[image_index as usize] = primary_cb;
+
+    let inheritance_info = vk::CommandBufferInheritanceInfoBuilder::new()
+        .render_pass(render_pass)
+        .subpass(0)
+        .framebuffer(*framebuffer);
+
+    let secondary_cb_begin_info = vk::CommandBufferBeginInfoBuilder::new()
+        .flags(vk::CommandBufferUsageFlags::RENDER_PASS_CONTINUE)
+        .inheritance_info(&inheritance_info);
+
+
+    let pri_cb_begin_info = vk::CommandBufferBeginInfoBuilder::new();
+    device.begin_command_buffer(primary_cb, &pri_cb_begin_info).unwrap();
+    let clear_values = vec![
+        vk::ClearValue {
+            color: vk::ClearColorValue {
+                float32: [0.0, 0.0, 0.0, 1.0],
+            },
+        },
+        vk::ClearValue {
+            depth_stencil: vk::ClearDepthStencilValue {
+                depth: 1.0,
+                stencil: 0,
+            },
+        },
+    ];
+    let render_pass_begin_info = vk::RenderPassBeginInfoBuilder::new()
+        .render_pass(render_pass)
+        .framebuffer(*framebuffer)
+        .render_area(vk::Rect2D {
+            offset: vk::Offset2D { x: 0, y: 0 },
+            extent: swapchain_image_extent,
+        })
+        .clear_values(&clear_values);
+    device.cmd_begin_render_pass(
+        primary_cb,
+        &render_pass_begin_info,
+        // vk::SubpassContents::INLINE,
+        vk::SubpassContents::SECONDARY_COMMAND_BUFFERS
+    );
+    device.cmd_bind_pipeline(primary_cb, vk::PipelineBindPoint::GRAPHICS, primary_pipeline);
+    device.cmd_bind_index_buffer(primary_cb, ib, 0, vk::IndexType::UINT32);
+    device.cmd_bind_vertex_buffers(primary_cb, 0, &[vb], &[0]);
+    device.cmd_bind_descriptor_sets(primary_cb, vk::PipelineBindPoint::GRAPHICS, primary_pipeline_layout, 0, &d_sets, &[]);
+    let ptr = std::ptr::addr_of!(push_constant.view) as *const c_void;
+    device.cmd_push_constants
+    (
+        primary_cb,
+        primary_pipeline_layout,
+        vk::ShaderStageFlags::VERTEX,
+        0,
+        std::mem::size_of::<PushConstants>() as u32,
+        ptr,
+    );
+    device.cmd_draw_indexed(primary_cb, (indices_terr.len()) as u32, ((indices_terr.len()) / 3) as u32, 0, 0, 0);
+
+
+
+
+    // device.begin_command_buffer(cb_2, &cb_2_begin_info).unwrap();
+
+
+
+    Ok(())
+}
+
+
+
 unsafe fn record_cb_111
 <'a>
 (
+    command_pool: vk::CommandPool,
     command_buffer: vk::CommandBuffer,
     cb_2: vk::CommandBuffer,
     device: &erupt::DeviceLoader,
@@ -1327,6 +1493,10 @@ unsafe fn record_cb_111
 )
 -> Result<(), &'a str>
 {
+
+
+
+    device.reset_command_pool(command_pool, vk::CommandPoolResetFlags::empty()).unwrap();
     
     let inheritance_info = vk::CommandBufferInheritanceInfoBuilder::new()
         .render_pass(render_pass)
