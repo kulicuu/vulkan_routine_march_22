@@ -820,7 +820,7 @@ unsafe fn routine_pure_procedural
 
 
 
-            record_cb_218
+            let cb_34 = record_cb_218
             (
                 &device,
                 render_pass,
@@ -842,41 +842,52 @@ unsafe fn routine_pure_procedural
                 vb_grid,
                 ib,
                 push_constant,
-            );
+                vertices_grid.len() as u32,
+            ).unwrap();
 
-            record_cb_111
-            (
-                command_pool,
-                command_buffer,
-                cb_2,
-                &device,
-                render_pass,
-                framebuffer,
-                swapchain_image_extent,
-                pipeline,
-                pipeline_layout,
-                pipeline_grid,
-                pipeline_layout_grid,
-                &indices_terr,
-                d_sets.clone(),
-                vb,
-                vb_grid,
-                ib,
-                push_constant,
-            );
-
-
-
+            // record_cb_111
+            // (
+            //     command_pool,
+            //     command_buffer,
+            //     cb_2,
+            //     &device,
+            //     render_pass,
+            //     framebuffer,
+            //     swapchain_image_extent,
+            //     pipeline,
+            //     pipeline_layout,
+            //     pipeline_grid,
+            //     pipeline_layout_grid,
+            //     &indices_terr,
+            //     d_sets.clone(),
+            //     vb,
+            //     vb_grid,
+            //     ib,
+            //     push_constant,
+            // );
 
 
 
 
-            let command_buffers = [command_buffer];
+
+            // let now_cb = primary_command_buffers[image_index as usize];
+            let command_buffers = [cb_34];
+
+            let cbs_35 = [cb_34];
+
+
+
+            // let command_buffers = [command_buffer];
+
+
+
+
+
             let signal_semaphores = vec![render_finished_semaphores[frame]];
             let submit_info = vk::SubmitInfoBuilder::new()
                 .wait_semaphores(&wait_semaphores)
                 .wait_dst_stage_mask(&[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT])
-                .command_buffers(&command_buffers)
+                .command_buffers(&cbs_35)
                 .signal_semaphores(&signal_semaphores);
 
             let in_flight_fence = in_flight_fences[frame];
@@ -1387,14 +1398,49 @@ unsafe fn record_cb_218
     vb_grid: vk::Buffer,
     ib: vk::Buffer,
     push_constant: PushConstants,
+    // primary_cb_vertex_count: u32,
+    grid_cb_vertex_count: u32,
+
 )
--> Result<(), &'a str>
+-> Result<(vk::CommandBuffer), &'a str>
 {
 
 
     device.reset_command_pool(command_pool, vk::CommandPoolResetFlags::empty()).unwrap();
 
 
+
+
+    // Starting with a secondary command buffer, the grid drawing command buffer,
+    // which uses its own pipeline and layout.
+
+    let info = vk::CommandBufferAllocateInfoBuilder::new()
+        .command_pool(command_pool)
+        .level(vk::CommandBufferLevel::SECONDARY)
+        .command_buffer_count(1);
+    let grid_cb = device.allocate_command_buffers(&info).unwrap()[0];
+
+    let inheritance_info = vk::CommandBufferInheritanceInfoBuilder::new()
+        .render_pass(render_pass)
+        .subpass(0)
+        .framebuffer(*framebuffer);
+
+    let grid_cb_begin_info = vk::CommandBufferBeginInfoBuilder::new()
+        .flags(vk::CommandBufferUsageFlags::RENDER_PASS_CONTINUE)
+        .inheritance_info(&inheritance_info);
+
+
+    device.begin_command_buffer(grid_cb, &grid_cb_begin_info).unwrap();
+
+
+    device.cmd_bind_pipeline(grid_cb, vk::PipelineBindPoint::GRAPHICS, grid_pipeline);
+    device.cmd_bind_vertex_buffers(grid_cb, 0, &[vb_grid], &[0]);
+    device.cmd_draw(grid_cb, grid_cb_vertex_count, 1, 0, 0);
+    device.end_command_buffer(grid_cb).unwrap();
+
+
+
+    // Primary command buffer:
     let allocate_info = vk::CommandBufferAllocateInfoBuilder::new()
         .command_pool(command_pool)
         .level(vk::CommandBufferLevel::PRIMARY)
@@ -1402,15 +1448,6 @@ unsafe fn record_cb_218
 
     let primary_cb = device.allocate_command_buffers(&allocate_info).unwrap()[0];
     primary_command_buffers[image_index as usize] = primary_cb;
-
-    let inheritance_info = vk::CommandBufferInheritanceInfoBuilder::new()
-        .render_pass(render_pass)
-        .subpass(0)
-        .framebuffer(*framebuffer);
-
-    let secondary_cb_begin_info = vk::CommandBufferBeginInfoBuilder::new()
-        .flags(vk::CommandBufferUsageFlags::RENDER_PASS_CONTINUE)
-        .inheritance_info(&inheritance_info);
 
 
     let pri_cb_begin_info = vk::CommandBufferBeginInfoBuilder::new();
@@ -1460,12 +1497,22 @@ unsafe fn record_cb_218
 
 
 
+    device.cmd_execute_commands(primary_cb, &[grid_cb]);
+    device.cmd_end_render_pass(primary_cb);
+    device.end_command_buffer(primary_cb).unwrap();
+    // let inheritance_info = vk::CommandBufferInheritanceInfoBuilder::new()
+    //     .render_pass(render_pass)
+    //     .subpass(0)
+    //     .framebuffer(*framebuffer);
 
     // device.begin_command_buffer(cb_2, &cb_2_begin_info).unwrap();
 
+    // let grid_cb_begin_info = vk::CommandBufferBeginInfoBuilder::new()
+    //     .flags(vk::CommandBufferUsageFlags::RENDER_PASS_CONTINUE)
+    //     .inheritance_info(&inheritance_info);
+    // device.begin_command_buffer(cb_2, &grid_cb_begin_info).unwrap();
 
-
-    Ok(())
+    Ok((primary_cb))
 }
 
 
@@ -1496,17 +1543,17 @@ unsafe fn record_cb_111
 
 
 
-    device.reset_command_pool(command_pool, vk::CommandPoolResetFlags::empty()).unwrap();
+    // device.reset_command_pool(command_pool, vk::CommandPoolResetFlags::empty()).unwrap();
     
-    let inheritance_info = vk::CommandBufferInheritanceInfoBuilder::new()
-        .render_pass(render_pass)
-        .subpass(0)
-        .framebuffer(framebuffer);
+    // let inheritance_info = vk::CommandBufferInheritanceInfoBuilder::new()
+    //     .render_pass(render_pass)
+    //     .subpass(0)
+    //     .framebuffer(framebuffer);
 
-    let cb_2_begin_info = vk::CommandBufferBeginInfoBuilder::new()
-        .flags(vk::CommandBufferUsageFlags::RENDER_PASS_CONTINUE)
-        .inheritance_info(&inheritance_info);
-    device.begin_command_buffer(cb_2, &cb_2_begin_info).unwrap();
+    // let cb_2_begin_info = vk::CommandBufferBeginInfoBuilder::new()
+    //     .flags(vk::CommandBufferUsageFlags::RENDER_PASS_CONTINUE)
+    //     .inheritance_info(&inheritance_info);
+    // device.begin_command_buffer(cb_2, &cb_2_begin_info).unwrap();
 
 
 
