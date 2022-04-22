@@ -302,8 +302,21 @@ unsafe fn routine_pure_procedural
             .queue_family_index(queue_family)
             .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
     let command_pool = device.create_command_pool(&command_pool_info, None).unwrap();
+    // original, still using
     
     
+    let mut command_pools: Vec<vk::CommandPool> = vec![]; // this follows usage in the tutorial  https://github.com/KyleMayes/vulkanalia/blob/master/tutorial/src/32_secondary_command_buffers.rs
+    
+
+
+
+    for _ in 0..swapchain_images.len() {
+        let info = vk::CommandPoolCreateInfoBuilder::new()
+            .flags(vk::CommandPoolCreateFlags::TRANSIENT)
+            .queue_family_index(queue_family);
+        let command_pool = device.create_command_pool(&info, None).unwrap();
+        command_pools.push(command_pool);
+    }
     
     
  
@@ -364,7 +377,7 @@ unsafe fn routine_pure_procedural
         queue,
         command_pool,
         &mut vertices_grid,
-    );
+    ).unwrap();
 
     let info = vk::DescriptorSetLayoutBindingFlagsCreateInfoBuilder::new()
         .binding_flags(&[vk::DescriptorBindingFlags::empty()]);
@@ -624,19 +637,27 @@ unsafe fn routine_pure_procedural
         .command_buffer_count(swapchain_framebuffers.len() as _);
     let cmd_bufs = device.allocate_command_buffers(&cmd_buf_allocate_info).unwrap();
 
+    
+    let cb_2_info = vk::CommandBufferAllocateInfoBuilder::new()
+        .command_pool(command_pool)
+        .level(vk::CommandBufferLevel::SECONDARY)
+        .command_buffer_count(swapchain_framebuffers.len() as _);
+    let cb_2s = device.allocate_command_buffers(&cb_2_info).unwrap();
 
 
 
 
-
-    let cb_2 = update_secondary_command_buffer
-    (
-        &command_pool,
-        &device,
-        &render_pass,
-        &swapchain_framebuffers,
-        pipeline_grid,
-    ).unwrap();
+    // let cb_2 = update_secondary_command_buffer
+    // (
+    //     &command_pool,
+    //     &device,
+    //     &render_pass,
+    //     &swapchain_framebuffers,
+    //     pipeline_grid,
+    //     vb_grid,
+    //     vertices_grid.len(),
+    //     swapchain_image_extent,
+    // ).unwrap();
 
 
 
@@ -755,27 +776,39 @@ unsafe fn routine_pure_procedural
             }
             images_in_flight[image_index as usize] = in_flight_fences[frame];
             let wait_semaphores = vec![image_available_semaphores[frame]];
-            // let command_buffers = vec![cmd_bufs[image_index as usize]];
+
+
+
+
+
 
             let command_buffer = cmd_bufs[image_index as usize];
+            let cb_2 = cb_2s[image_index as usize];
             let framebuffer = swapchain_framebuffers[image_index as usize];
 
 
             record_cb_111
             (
                 command_buffer,
+                cb_2,
                 &device,
                 render_pass,
                 framebuffer,
                 swapchain_image_extent,
                 pipeline,
                 pipeline_layout,
+                pipeline_grid,
+                pipeline_layout_grid,
                 &indices_terr,
                 d_sets.clone(),
                 vb,
+                vb_grid,
                 ib,
                 push_constant,
             );
+
+
+
 
 
 
@@ -1199,7 +1232,8 @@ fn find_bad_tri
 // }
 
 // this will only be called once in this grid case, because the grid is not moved.
-unsafe fn update_secondary_command_buffer
+unsafe fn update_secondary_command_buffer // for the grid render, should rename to reflect
+// the specificity
 <'a>
 (
     command_pool: &vk::CommandPool,
@@ -1207,7 +1241,9 @@ unsafe fn update_secondary_command_buffer
     render_pass: &vk::RenderPass,
     framebuffers: &[vk::Framebuffer],
     pipeline: vk::Pipeline,  // this is the pipeline with primitive topology of line lisnt.
-
+    vb: vk::Buffer,
+    vertex_count: usize,
+    swapchain_image_extent: vk::Extent2D,
 )
 -> Result<
     vk::CommandBuffer
@@ -1234,36 +1270,76 @@ unsafe fn update_secondary_command_buffer
 
     device.begin_command_buffer(cb, &info).unwrap();
 
+
+
+    let clear_values = vec![
+        vk::ClearValue {
+            color: vk::ClearColorValue {
+                float32: [0.0, 0.0, 0.0, 1.0],
+            },
+        },
+        vk::ClearValue {
+            depth_stencil: vk::ClearDepthStencilValue {
+                depth: 1.0,
+                stencil: 0,
+            },
+        },
+    ];
+    let render_pass_begin_info = vk::RenderPassBeginInfoBuilder::new()
+        .render_pass(*render_pass)
+        .framebuffer(framebuffers[0])
+        .render_area(vk::Rect2D {
+            offset: vk::Offset2D { x: 0, y: 0 },
+            extent: swapchain_image_extent,
+        })
+        .clear_values(&clear_values);
+    device.cmd_begin_render_pass(
+        cb,
+        &render_pass_begin_info,
+        vk::SubpassContents::INLINE,
+    );
     device.cmd_bind_pipeline(cb, vk::PipelineBindPoint::GRAPHICS, pipeline);
-
     // now we need to bind the vertices for this pipeline. We have somewhere a set of line vertices we should bind to this pipeline.
-
-
-
-
+    device.cmd_bind_vertex_buffers(cb, 0, &[vb], &[0]);
+    device.cmd_draw(cb, vertex_count as u32, 1, 0, 0);
     Ok(cb)
-
-
 }
 
 unsafe fn record_cb_111
 <'a>
 (
     command_buffer: vk::CommandBuffer,
+    cb_2: vk::CommandBuffer,
     device: &erupt::DeviceLoader,
     render_pass: vk::RenderPass,
     framebuffer: vk::Framebuffer,
     swapchain_image_extent: vk::Extent2D,
     pipeline: vk::Pipeline,
     pipeline_layout: vk::PipelineLayout,
+    pipeline_grid: vk::Pipeline,
+    pipeline_layout_grid: vk::PipelineLayout,
     indices_terr: &Vec<u32>,
     d_sets: erupt::SmallVec<vk::DescriptorSet>,
     vb: vk::Buffer,
+    vb_grid: vk::Buffer,
     ib: vk::Buffer,
     push_constant: PushConstants,
 )
 -> Result<(), &'a str>
 {
+    
+    let inheritance_info = vk::CommandBufferInheritanceInfoBuilder::new()
+        .render_pass(render_pass)
+        .subpass(0)
+        .framebuffer(framebuffer);
+
+    let cb_2_begin_info = vk::CommandBufferBeginInfoBuilder::new()
+        .flags(vk::CommandBufferUsageFlags::RENDER_PASS_CONTINUE)
+        .inheritance_info(&inheritance_info);
+    device.begin_command_buffer(cb_2, &cb_2_begin_info).unwrap();
+
+
+
     let cmd_buf_begin_info = vk::CommandBufferBeginInfoBuilder::new();
     device.begin_command_buffer(command_buffer, &cmd_buf_begin_info).unwrap();
     let clear_values = vec![
@@ -1307,6 +1383,7 @@ unsafe fn record_cb_111
         ptr,
     );
     device.cmd_draw_indexed(command_buffer, (indices_terr.len()) as u32, ((indices_terr.len()) / 3) as u32, 0, 0, 0);
+    // device.cmd_execute_commands(command_buffer, &[cb_2]);
     device.cmd_end_render_pass(command_buffer);
     device.end_command_buffer(command_buffer).unwrap();
     Ok(())
@@ -1379,7 +1456,7 @@ fn mesh_cull_9945
     // }
 
 
-    indices.drain(18000..);
+    indices.drain(28000..);
     Ok(indices)
 }
 
