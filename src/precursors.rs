@@ -1,8 +1,5 @@
 
 
-
-
-
 use erupt::{
     cstr,
     utils::{self, surface},
@@ -25,11 +22,6 @@ use std::{
     thread,
     time,
 };
-
-
-
-
-
 
 pub unsafe fn create_precursors
 <'a>
@@ -70,11 +62,6 @@ pub unsafe fn create_precursors
                 queue_family_properties
                     .queue_flags
                     .contains(vk::QueueFlags::GRAPHICS)
-                    // (
-                    //     .contains(vk::QueueFlags::GRAPHICS)
-                    //     && .contains(vk::QueueFlags::TRANSFER)
-                    // )
-                    // .contains(vk::QueueFlags::TRANSFER)
                     && instance
                         .get_physical_device_surface_support_khr(
                             physical_device,

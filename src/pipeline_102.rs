@@ -104,9 +104,6 @@ pub unsafe fn pipeline_102
         
     let depth_image_view = device.create_image_view(&depth_image_view_info, None)
                 .expect("Failed to create image view.");
-
-
-
     let vertex_buffer_bindings_desc_info = vk::VertexInputBindingDescriptionBuilder::new()
         .binding(0)
         .stride(std::mem::size_of::<VertexV3>() as u32)
@@ -126,8 +123,6 @@ pub unsafe fn pipeline_102
         .vertex_binding_descriptions(&[vertex_buffer_bindings_desc_info])
         .vertex_attribute_descriptions(&[vert_buff_att_desc_info_pos, vert_buff_att_desc_info_color])
         .build_dangling();
-
-
 
     let input_assembly = vk::PipelineInputAssemblyStateCreateInfoBuilder::new()
         .topology(vk::PrimitiveTopology::LINE_LIST)
@@ -159,16 +154,8 @@ pub unsafe fn pipeline_102
         .cull_mode(vk::CullModeFlags::NONE)
         .front_face(vk::FrontFace::COUNTER_CLOCKWISE);
 
-
-
-
-
     let pipeline_layout_grid_info = vk::PipelineLayoutCreateInfoBuilder::new();
-
-
-
     let pipeline_layout_grid = device.create_pipeline_layout(&pipeline_layout_grid_info, None).unwrap();
-
 
     let pipeline_grid_info = vk::GraphicsPipelineCreateInfoBuilder::new()
         // .stages(&shader_stages)
@@ -180,9 +167,7 @@ pub unsafe fn pipeline_102
         .render_pass(*render_pass)
         .subpass(0);
 
-
     let pipeline_grid = device.create_graphics_pipelines(vk::PipelineCache::null(), &[pipeline_grid_info], None).unwrap()[0];
-
 
     Ok((
         pipeline_grid,

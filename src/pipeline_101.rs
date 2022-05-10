@@ -53,6 +53,8 @@ pub unsafe fn pipeline_101
         vk::Pipeline,
         vk::PipelineLayout,
         vk::ImageView,
+        vk::ShaderModule,
+        vk::ShaderModule,
     ), 
     &'a str>
 {
@@ -182,7 +184,7 @@ pub unsafe fn pipeline_101
         .depth_clamp_enable(true)
         .rasterizer_discard_enable(false)
         .polygon_mode(vk::PolygonMode::LINE)
-        .line_width(1.0)
+        .line_width(0.3)
         .cull_mode(vk::CullModeFlags::NONE)
         .front_face(vk::FrontFace::COUNTER_CLOCKWISE);
     let multisampling = vk::PipelineMultisampleStateCreateInfoBuilder::new()
@@ -242,6 +244,8 @@ pub unsafe fn pipeline_101
         pipeline,
         pipeline_layout,
         depth_image_view,
+        shader_vert,
+        shader_frag,
     ))
 }
 

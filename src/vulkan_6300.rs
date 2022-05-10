@@ -1,4 +1,3 @@
-
 #![feature(drain_filter)]
 
 use super::precursors::*;
@@ -31,7 +30,6 @@ use std::{
 
 use std::time::{Duration, Instant};
 use std::thread::sleep;
-
 use smallvec::SmallVec;
 use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 use memoffset::offset_of;
@@ -47,7 +45,6 @@ use winit::{
     window::WindowBuilder,
     window::Window
 };
-
 
 
 use structopt::StructOpt;
@@ -71,13 +68,11 @@ pub struct VertexV3 {
     color: [f32; 4],
 }
 
-
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
 struct PushConstants {
     view: glm::Mat4,
 }
-
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
@@ -86,7 +81,6 @@ struct UniformBufferObject {
     view: Matrix4<f32>,
     proj: Matrix4<f32>,
 }
-
 
 #[derive(Debug, StructOpt)]
 struct Opt {
@@ -111,7 +105,6 @@ struct ControlInput {
     skew: i32,
 }
 
-
 // static mut log_300: Vec<String> = vec!();
 unsafe extern "system" fn debug_callback(
     _message_severity: vk::DebugUtilsMessageSeverityFlagBitsEXT,
@@ -128,7 +121,6 @@ unsafe extern "system" fn debug_callback(
     vk::FALSE
 }
 
-
 pub unsafe fn vulkan_routine_6300
 ()
 {
@@ -136,22 +128,15 @@ pub unsafe fn vulkan_routine_6300
     routine_pure_procedural();
 }
 
-
-
-// create a monolith sort of like we start with app.
-// we are basically going to reproduce backup, but change names of stuff, and organize it better,
-// in order to be able to turn it into an object.
-
 unsafe fn routine_pure_procedural
 ()
 {
-    
     let opt = Opt { validation_layers: false };
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
         .with_title(TITLE)
         .with_resizable(false)
-        // .with_maximized(true)
+        .with_maximized(true)
         
         .build(&event_loop)
         .unwrap();
@@ -212,7 +197,6 @@ unsafe fn routine_pure_procedural
     };
     let surface = surface::create_surface(&instance, &window, None).unwrap();
 
-
     let (
         physical_device, 
         queue_family, 
@@ -226,7 +210,6 @@ unsafe fn routine_pure_procedural
     ).unwrap();
 
     println!("\n\n\nUsing physical device: {:?}\n\n\n", CStr::from_ptr(device_properties.device_name.as_ptr()));
-
 
     let queue_info = vec![vk::DeviceQueueCreateInfoBuilder::new()
         .queue_family_index(queue_family)
@@ -244,7 +227,6 @@ unsafe fn routine_pure_procedural
     if surface_caps.max_image_count > 0 && image_count > surface_caps.max_image_count {
         image_count = surface_caps.max_image_count;
     }
-
 
     let swapchain_image_extent = match surface_caps.current_extent {
         vk::Extent2D {
@@ -303,13 +285,8 @@ unsafe fn routine_pure_procedural
             .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
     let command_pool = device.create_command_pool(&command_pool_info, None).unwrap();
     // original, still using
-    
-    
     let mut command_pools: Vec<vk::CommandPool> = vec![]; // this follows usage in the tutorial  https://github.com/KyleMayes/vulkanalia/blob/master/tutorial/src/32_secondary_command_buffers.rs
     
-
-
-
     for _ in 0..swapchain_images.len() {
         let info = vk::CommandPoolCreateInfoBuilder::new()
             .flags(vk::CommandPoolCreateFlags::TRANSIENT)
@@ -318,41 +295,51 @@ unsafe fn routine_pure_procedural
         command_pools.push(command_pool);
     }
     
-    
- 
-
-
     let (mut vertices_terr, mut indices_terr) = load_model().unwrap();
-
-
     let grid_factor = 10;
-    let grid_resolution = 2.0 / grid_factor as f32;
-
+    let grid_resolution = 1.0 / grid_factor as f32;
     let mut vertices_grid = vec![];
+
+    // let vertex = VertexV3 {
+    //     pos: [
+    //         0.0,
+    //         0.0,
+    //         0.0,
+    //         1.0,
+    //     ],
+    //     color: [0.913, 0.9320, 0.80, 0.90],
+    // };
+
+    // vertices_grid.push(vertex);
+
+
+    // let vertex = VertexV3 {
+    //     pos: [
+    //         1.0,
+    //         1.0,
+    //         1.0,
+    //         1.0,
+    //     ],
+    //     color: [0.913, 0.9320, 0.80, 0.90],
+    // };
     for idx in 0..grid_factor {
         for jdx in 0..grid_factor {
             for kdx in 0..grid_factor {
                 let vertex = VertexV3 {
                     pos: [
-                        -2.0 + (grid_resolution * (idx as f32)),
-                        -2.0 + (grid_resolution * (jdx as f32)),
-                        -2.0 + (grid_resolution * (kdx as f32)),
-                        -1.0,
+                        (grid_resolution * (idx as f32)),
+                        (grid_resolution * (jdx as f32)),
+                        (grid_resolution * (kdx as f32)),
+                        1.0,
                     ],
-                    color: [0.13, 0.320, 0.80, 0.20],
+                    color: [0.913, 0.9320, 0.80, 0.90],
                 };
                 vertices_grid.push(vertex);
             }
         }
     }
 
-
-
-
     let physical_device_memory_properties = instance.get_physical_device_memory_properties(physical_device);
-
-
-    
     let ib = buffer_indices
     (
         &device,
@@ -361,7 +348,6 @@ unsafe fn routine_pure_procedural
         &mut indices_terr,
     ).unwrap();
     
-    
     let vb = buffer_vertices
     (
         &device,
@@ -369,7 +355,6 @@ unsafe fn routine_pure_procedural
         command_pool,
         &mut vertices_terr, 
     ).unwrap();
-
 
     let vb_grid = buffer_vertices
     (
@@ -389,17 +374,16 @@ unsafe fn routine_pure_procedural
         .descriptor_count(1)
         .stage_flags(vk::ShaderStageFlags::VERTEX)
         .immutable_samplers(&samplers);
-    let slice = &[binding];
+    let bindings = &[binding];
     let info = vk::DescriptorSetLayoutCreateInfoBuilder::new()
         .flags(vk::DescriptorSetLayoutCreateFlags::empty()) 
-        .bindings(slice);
+        .bindings(bindings);
     let descriptor_set_layout = device.create_descriptor_set_layout(&info, None).unwrap();
 
     let ubo_size = ::std::mem::size_of::<UniformBufferObject>();
     let mut uniform_buffers: Vec<vk::Buffer> = vec![];
     let mut uniform_buffers_memories: Vec<vk::DeviceMemory> = vec![];
     let swapchain_image_count = swapchain_images.len();
-
 
     for _ in 0..swapchain_image_count {
         let (uniform_buffer, uniform_buffer_memory) = create_buffer(
@@ -435,8 +419,6 @@ unsafe fn routine_pure_procedural
         },
     };
 
-
-
     let scalar_33 = 100000.0;
     let camera_location = glm::vec3(1.0 / scalar_33, 1.0 / scalar_33, 1.0 / scalar_33);
     let image_target = glm::vec3(0.0, 0.0, 0.0);
@@ -455,58 +437,30 @@ unsafe fn routine_pure_procedural
         }
     };
 
-
-    // let mut old_camera = Camera {
-    //     location: glm::vec3(1.0 / scalar_33, 1.0 / scalar_33, 1.0 / scalar_33),
-    //     target: glm::vec3(0.0, 0.0, 0.0),
-    //     up: glm::vec3(0.0, 1.0, 0.0),
-    // };
-
-
     let mut view: glm::Mat4 = glm::look_at::<f32>
     (
         &camera_location,
         &image_target,
         &yaw_axis_normal,
     );
-    // let mut old_view: glm::Mat4 = glm::look_at::<f32>
-    // (
-    //     &camera_location,
-    //     &camera_target,
-    //     // &yaw_axis_normal,
-    // );
-
     let mut push_constant = PushConstants {
         view: view,
     };
-
-    // let mut push_constant = PushConstants {
-    //     view: glm::Matrix4::look_at_rh(
-    //         Point3::new(0.80, 0.80, 0.80),
-    //         Point3::new(0.0, 0.0, 0.0),
-    //         Vector3::new(0.0, 0.0, 1.0),
-    // };
-
     let pool_size = vk::DescriptorPoolSizeBuilder::new()
         ._type(vk::DescriptorType::UNIFORM_BUFFER)
         .descriptor_count(swapchain_image_count as u32);
-
     let pool_sizes = &[pool_size];
     let set_layouts = &[descriptor_set_layout];
-
     let pool_info = vk::DescriptorPoolCreateInfoBuilder::new()
         .pool_sizes(pool_sizes)
         .max_sets(swapchain_image_count as u32);
 
-
     let desc_pool = device.create_descriptor_pool(&pool_info, None).unwrap();
-
     let d_set_alloc_info = vk::DescriptorSetAllocateInfoBuilder::new()
         .descriptor_pool(desc_pool)
         .set_layouts(set_layouts);
 
     let d_sets = device.allocate_descriptor_sets(&d_set_alloc_info).expect("failed in alloc DescriptorSet");
-
     let ubo_size = ::std::mem::size_of::<UniformBufferObject>() as u64;
 
 
@@ -594,6 +548,8 @@ unsafe fn routine_pure_procedural
         pipeline,
         pipeline_layout,
         depth_image_view,
+        shader_vert,
+        shader_frag,
     ) = pipeline_101
     (
         &device,
@@ -637,31 +593,19 @@ unsafe fn routine_pure_procedural
         .command_buffer_count(swapchain_framebuffers.len() as _);
     let cmd_bufs = device.allocate_command_buffers(&cmd_buf_allocate_info).unwrap();
 
-
-
-
-
-    
     let cb_2_info = vk::CommandBufferAllocateInfoBuilder::new()
         .command_pool(command_pool)
         .level(vk::CommandBufferLevel::SECONDARY)
         .command_buffer_count(swapchain_framebuffers.len() as _);
     let cb_2s = device.allocate_command_buffers(&cb_2_info).unwrap();
-
-
-
     let mut primary_command_buffers: Vec<vk::CommandBuffer> = vec![];
-
     let mut secondary_command_buffers: Vec<vk::CommandBuffer> = vec![];
-
-
     for img_idx in 0..swapchain_framebuffers.len() {
         let primary_cb_alloc_info = vk::CommandBufferAllocateInfoBuilder::new()
             .command_pool(command_pools[img_idx])
             .level(vk::CommandBufferLevel::PRIMARY)
             .command_buffer_count(1);
         primary_command_buffers.push(device.allocate_command_buffers(&primary_cb_alloc_info).unwrap()[0]);
-
         let secondary_cb_alloc_info = vk::CommandBufferAllocateInfoBuilder::new()
             .command_pool(command_pools[img_idx])
             .level(vk::CommandBufferLevel::SECONDARY)
@@ -670,30 +614,7 @@ unsafe fn routine_pure_procedural
     }
 
 
-
-
-
-
-    // let cb_2 = update_secondary_command_buffer
-    // (
-    //     &command_pool,
-    //     &device,
-    //     &render_pass,
-    //     &swapchain_framebuffers,
-    //     pipeline_grid,
-    //     vb_grid,
-    //     vertices_grid.len(),
-    //     swapchain_image_extent,
-    // ).unwrap();
-
-
-
-
-
-
-
     let now = Instant::now();
-
     let semaphore_info = vk::SemaphoreCreateInfoBuilder::new();
     let image_available_semaphores: Vec<_> = (0..FRAMES_IN_FLIGHT)
         .map(|_| device.create_semaphore(&semaphore_info, None).unwrap())
@@ -707,9 +628,7 @@ unsafe fn routine_pure_procedural
         .collect();
     let mut images_in_flight: Vec<_> = swapchain_images.iter().map(|_| vk::Fence::null()).collect();
     let mut frame = 0;
-
     let mut button_push: [bool; 2] = [false; 2];
-
     let mut control_input = ControlInput {
         roll: 0,
         pitch: 0,
@@ -732,7 +651,6 @@ unsafe fn routine_pure_procedural
                 state,
                 ..
             }) => match (keycode, state) {
-
                 (VirtualKeyCode::Escape, ElementState::Released) => {
                     *control_flow = ControlFlow::Exit
                 },
@@ -754,7 +672,7 @@ unsafe fn routine_pure_procedural
                 (winit::event::VirtualKeyCode::Semicolon, ElementState::Pressed) => {
                     control_input.yaw -= 1;
                 },
-                (winit::event::VirtualKeyCode::J, ElementState::Pressed) => {
+                (winit::event::VirtualKeyCode::Q, ElementState::Pressed) => {
                     control_input.yaw += 1;
                 },
                 _ => (),
@@ -793,32 +711,17 @@ unsafe fn routine_pure_procedural
 
             button_push[frame] = false;
  
-
-
-
-
             let image_in_flight = images_in_flight[image_index as usize];
             if !image_in_flight.is_null() {
                 device.wait_for_fences(&[image_in_flight], true, u64::MAX).unwrap();
             }
             images_in_flight[image_index as usize] = in_flight_fences[frame];
             let wait_semaphores = vec![image_available_semaphores[frame]];
-
-
-
             let command_pool = command_pools[image_index as usize];
-
-
-
-
-
-
 
             let command_buffer = cmd_bufs[image_index as usize];
             let cb_2 = cb_2s[image_index as usize];
             let framebuffer = swapchain_framebuffers[image_index as usize];
-
-
 
             let cb_34 = record_cb_218
             (
@@ -866,23 +769,7 @@ unsafe fn routine_pure_procedural
             //     push_constant,
             // );
 
-
-
-
-
-            // let now_cb = primary_command_buffers[image_index as usize];
-            let command_buffers = [cb_34];
-
             let cbs_35 = [cb_34];
-
-
-
-            // let command_buffers = [command_buffer];
-
-
-
-
-
             let signal_semaphores = vec![render_finished_semaphores[frame]];
             let submit_info = vk::SubmitInfoBuilder::new()
                 .wait_semaphores(&wait_semaphores)
@@ -908,42 +795,41 @@ unsafe fn routine_pure_procedural
 
 
         }
-        // Event::LoopDestroyed => unsafe {
-        //     device.device_wait_idle().unwrap();
-        //     for &semaphore in image_available_semaphores
-        //         .iter()
-        //         .chain(render_finished_semaphores.iter())
-        //     {
-        //         device.destroy_semaphore(semaphore, None);
-        //     }
-        //     for &fence in &in_flight_fences {
-        //         device.destroy_fence(fence, None);
-        //     }
-        //     device.destroy_command_pool(command_pool, None);
-        //     for &framebuffer in &swapchain_framebuffers {
-        //         device.destroy_framebuffer(framebuffer, None);
-        //     }
-        //     device.destroy_pipeline(pipeline, None);
-        //     device.destroy_render_pass(render_pass, None);
-        //     device.destroy_pipeline_layout(pipeline_layout, None);
-        //     device.destroy_shader_module(shader_vert, None);
-        //     device.destroy_shader_module(shader_frag, None);
-        //     for &image_view in &swapchain_image_views {
-        //         device.destroy_image_view(image_view, None);
-        //     }
-        //     device.destroy_swapchain_khr(swapchain, None);
-        //     device.destroy_device(None);
-        //     instance.destroy_surface_khr(surface, None);
-        //     if !messenger.is_null() {
-        //         instance.destroy_debug_utils_messenger_ext(messenger, None);
-        //     }
-        //     instance.destroy_instance(None);
-        //     println!("Exited cleanly");
-        // },
+        Event::LoopDestroyed => unsafe {
+            device.device_wait_idle().unwrap();
+            for &semaphore in image_available_semaphores
+                .iter()
+                .chain(render_finished_semaphores.iter())
+            {
+                device.destroy_semaphore(semaphore, None);
+            }
+            for &fence in &in_flight_fences {
+                device.destroy_fence(fence, None);
+            }
+            device.destroy_command_pool(command_pool, None);
+            for &framebuffer in &swapchain_framebuffers {
+                device.destroy_framebuffer(framebuffer, None);
+            }
+            device.destroy_pipeline(pipeline, None);
+            device.destroy_render_pass(render_pass, None);
+            device.destroy_pipeline_layout(pipeline_layout, None);
+            device.destroy_shader_module(shader_vert, None);
+            device.destroy_shader_module(shader_frag, None);
+            for &image_view in &swapchain_image_views {
+                device.destroy_image_view(image_view, None);
+            }
+            device.destroy_swapchain_khr(swapchain, None);
+            device.destroy_device(None);
+            instance.destroy_surface_khr(surface, None);
+            // instance.destroy_debug_utils_messenger_ext(messenger, None);
+            // if !messenger.is_null() {
+            //     instance.destroy_debug_utils_messenger_ext(messenger, None);
+            // }
+            instance.destroy_instance(None);
+            println!("Exited cleanly");
+        },
         _ => (),
     })
-
-
 }
 
 
@@ -998,7 +884,6 @@ unsafe fn update_uniform_buffer
 }
 
 
-
 unsafe fn create_buffer
 (
     device: &DeviceLoader,
@@ -1028,7 +913,6 @@ unsafe fn create_buffer
         .expect("Failed to bind buffer.");
     (buffer, buffer_memory)
 }
-
 
 
 pub fn load_model
@@ -1061,19 +945,11 @@ pub fn load_model
     for i in 0..(indices_terr_full.len() / 2) {
         indices_terr.push(indices_terr_full[i]);
     }
-    // let mut indices = terrain_frustrum_culling(&vertices_terr, indices_terr.clone()).unwrap();
-
-
     println!("\n\nBefore {}", indices_terr.len());
     indices_terr = mesh_cull_9945(indices_terr).unwrap();
     println!("After: {}\n\n", indices_terr.len());
     Ok((vertices_terr, indices_terr))
 }
-
-
-
-
-
 
 
 unsafe fn buffer_indices
@@ -1133,27 +1009,16 @@ unsafe fn buffer_indices
         .dst_offset(0)
         .size(ib_size);
     device.cmd_copy_buffer(cb, sb, ib, &[info]);
-    let slice = &[cb];
+    let cbs = &[cb];
     device.end_command_buffer(cb).expect("Failed to end command buffer.");
     let info = vk::SubmitInfoBuilder::new()
         .wait_semaphores(&[])
-        .command_buffers(slice)
+        .command_buffers(cbs)
         .signal_semaphores(&[]);
     device.queue_submit(queue, &[info], vk::Fence::null()).expect("Failed to queue submit.");
     Ok(ib)
 }
 
-
-
-// unsafe fn buffer_grid_vertices
-// <'a>
-// (
-
-// )
-// -> Result<(vk::Buffer), &'a str>
-// {
-
-// }
 
 unsafe fn buffer_vertices
 <'a>
@@ -1210,10 +1075,10 @@ unsafe fn buffer_vertices
         .size(vb_size);
     device.cmd_copy_buffer(cb, sb, vb, &[info]);
     device.end_command_buffer(cb).expect("End command buffer fail.");
-    let slice = &[cb];
+    let cbs = &[cb];
     let info = vk::SubmitInfoBuilder::new()
         .wait_semaphores(&[])
-        .command_buffers(slice)
+        .command_buffers(cbs)
         .signal_semaphores(&[]);
     device.queue_submit(queue, &[info], vk::Fence::null()).expect("Queue submit fail.");
     Ok(vb)
@@ -1273,108 +1138,6 @@ fn find_bad_tri
     -1
 }
 
-
-// this will record the secondary command buffer which uses pipeline_102
-// to make the grid pattern.
-// aka update_secondary_command_buffer
-
-// unsafe fn record_cb_113
-// <'a>
-// (
-//     command_buffer: vk::CommandBuffer,
-//     device: &erupt::DeviceLoader,
-//     render_pass: vk::RenderPass,
-//     framebuffer: vk::Framebuffer,
-//     swapchain_image_extent: vk::Extent2D,
-//     pipeline: vk::Pipeline,
-//     pipeline_layout: vk::PipelineLayout,
-//     vb: vk::Buffer,
-// )
-// -> Result<(), &'a str>
-// {
-
-//     let info = vk::CommandBufferAllocateInfoBuilder::new()
-//         .command_pool(command)
-
-
-//     Ok(())
-// }
-
-// this will only be called once in this grid case, because the grid is not moved.
-unsafe fn update_secondary_command_buffer // for the grid render, should rename to reflect
-// the specificity
-<'a>
-(
-    command_pool: &vk::CommandPool,
-    device: &erupt::DeviceLoader,
-    render_pass: &vk::RenderPass,
-    framebuffers: &[vk::Framebuffer],
-    pipeline: vk::Pipeline,  // this is the pipeline with primitive topology of line lisnt.
-    vb: vk::Buffer,
-    vertex_count: usize,
-    swapchain_image_extent: vk::Extent2D,
-)
--> Result<
-    vk::CommandBuffer
-, &'a str>
-{
-
-    let info = vk::CommandBufferAllocateInfoBuilder::new()
-        .command_pool(*command_pool)
-        .level(vk::CommandBufferLevel::SECONDARY)
-        .command_buffer_count(1);
-    let cb = device.allocate_command_buffers(&info).unwrap()[0];
-
-
-    let inheritance_info = vk::CommandBufferInheritanceInfoBuilder::new()
-        .render_pass(*render_pass)
-        .subpass(0)
-        .framebuffer(framebuffers[0]);
-
-
-
-    let info = vk::CommandBufferBeginInfoBuilder::new()
-        .flags(vk::CommandBufferUsageFlags::RENDER_PASS_CONTINUE)
-        .inheritance_info(&inheritance_info);
-
-    device.begin_command_buffer(cb, &info).unwrap();
-
-
-
-    let clear_values = vec![
-        vk::ClearValue {
-            color: vk::ClearColorValue {
-                float32: [0.0, 0.0, 0.0, 1.0],
-            },
-        },
-        vk::ClearValue {
-            depth_stencil: vk::ClearDepthStencilValue {
-                depth: 1.0,
-                stencil: 0,
-            },
-        },
-    ];
-    let render_pass_begin_info = vk::RenderPassBeginInfoBuilder::new()
-        .render_pass(*render_pass)
-        .framebuffer(framebuffers[0])
-        .render_area(vk::Rect2D {
-            offset: vk::Offset2D { x: 0, y: 0 },
-            extent: swapchain_image_extent,
-        })
-        .clear_values(&clear_values);
-    device.cmd_begin_render_pass(
-        cb,
-        &render_pass_begin_info,
-        vk::SubpassContents::INLINE,
-    );
-    device.cmd_bind_pipeline(cb, vk::PipelineBindPoint::GRAPHICS, pipeline);
-    // now we need to bind the vertices for this pipeline. We have somewhere a set of line vertices we should bind to this pipeline.
-    device.cmd_bind_vertex_buffers(cb, 0, &[vb], &[0]);
-    device.cmd_draw(cb, vertex_count as u32, 1, 0, 0);
-    Ok(cb)
-}
-
-
 unsafe fn record_cb_218
 <'a>
 (
@@ -1432,10 +1195,14 @@ unsafe fn record_cb_218
 
     device.begin_command_buffer(grid_cb, &grid_cb_begin_info).unwrap();
 
-
+    // println!("grid_cb_vertex_count {:?}", grid_cb_vertex_count);    
     device.cmd_bind_pipeline(grid_cb, vk::PipelineBindPoint::GRAPHICS, grid_pipeline);
     device.cmd_bind_vertex_buffers(grid_cb, 0, &[vb_grid], &[0]);
-    device.cmd_draw(grid_cb, grid_cb_vertex_count, 1, 0, 0);
+
+    // device.cmd_bind_descriptor_sets(grid_cb, vk::PipelineBindPoint::GRAPHICS, grid_pipeline_layout, 0, &d_sets, &[]);
+
+
+    device.cmd_draw(grid_cb, grid_cb_vertex_count, grid_cb_vertex_count / 2, 0, 0);
     device.end_command_buffer(grid_cb).unwrap();
 
 
@@ -1500,17 +1267,7 @@ unsafe fn record_cb_218
     device.cmd_execute_commands(primary_cb, &[grid_cb]);
     device.cmd_end_render_pass(primary_cb);
     device.end_command_buffer(primary_cb).unwrap();
-    // let inheritance_info = vk::CommandBufferInheritanceInfoBuilder::new()
-    //     .render_pass(render_pass)
-    //     .subpass(0)
-    //     .framebuffer(*framebuffer);
 
-    // device.begin_command_buffer(cb_2, &cb_2_begin_info).unwrap();
-
-    // let grid_cb_begin_info = vk::CommandBufferBeginInfoBuilder::new()
-    //     .flags(vk::CommandBufferUsageFlags::RENDER_PASS_CONTINUE)
-    //     .inheritance_info(&inheritance_info);
-    // device.begin_command_buffer(cb_2, &grid_cb_begin_info).unwrap();
 
     Ok((primary_cb))
 }
@@ -1631,11 +1388,6 @@ unsafe fn render_pipeline_202
 }
 
 
-
-
-
-
-
 // Tesselation shader
 // Secondary command buffer recorded on separate thread.
 // Legacy rasterization.
@@ -1671,15 +1423,9 @@ fn mesh_cull_9945
     //         cool = false;
     //     }
     // }
-
-
-    indices.drain(28000..);
+    indices.drain(20000..);
     Ok(indices)
 }
-
-
-
-
 
 
 fn transform_camera
@@ -1725,8 +1471,6 @@ fn transform_camera
 }
 
 
-
-
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 struct Attitude {
@@ -1743,9 +1487,6 @@ struct Camera {
     attitude: Attitude,
     position: glm::Vec3,
 }
-
-
-
 
 
 #[cfg(test)]
@@ -1770,10 +1511,7 @@ mod tests {
                 yaw_axis_normal,
             }
         };
-
-
     }
-
 }
 
 
