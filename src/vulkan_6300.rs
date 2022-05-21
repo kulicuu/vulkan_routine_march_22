@@ -23,11 +23,11 @@ use std::{
     result::Result,
     result::Result::*,
     string::String,
-    sync::Arc,
+    sync::{Arc, Mutex, mpsc},
     thread,
     time,
 };
-
+// use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use std::thread::sleep;
 use smallvec::SmallVec;
@@ -48,7 +48,7 @@ use winit::{
 
 
 use structopt::StructOpt;
-const TITLE: &str = "vulkan-routine";
+const TITLE: &str = "vulkan-routine-6300";
 const FRAMES_IN_FLIGHT: usize = 2;
 const LAYER_KHRONOS_VALIDATION: *const c_char = cstr!("VK_LAYER_KHRONOS_validation");
 const SHADER_VERT: &[u8] = include_bytes!("../spv/s_400_.vert.spv");
@@ -125,12 +125,6 @@ pub unsafe fn vulkan_routine_6300
 ()
 {
     println!("\n6300\n");
-    routine_pure_procedural();
-}
-
-unsafe fn routine_pure_procedural
-()
-{
     let opt = Opt { validation_layers: false };
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
@@ -209,7 +203,37 @@ unsafe fn routine_pure_procedural
         surface.clone(),
     ).unwrap();
 
+
+
+
+
     println!("\n\n\nUsing physical device: {:?}\n\n\n", CStr::from_ptr(device_properties.device_name.as_ptr()));
+
+
+    // let coos_100 = move |device| {
+    //     println!("Other thread");
+    //     println!("device {:?}", device);
+    // };
+
+
+    // let handle = thread::spawn(coos_100);
+
+    let counter = Arc::new(Mutex::new(0));
+
+
+    struct WorkPackage<'a> {
+        device: &'a erupt::DeviceLoader
+    }
+
+
+    // ...might be easier to use mutex for this.
+
+    // worker thread transmits results back along this channel
+    let (worker_t, main_r): (mpsc::Sender<vk::CommandBuffer>, mpsc::Receiver<vk::CommandBuffer>) = mpsc::channel();
+
+    // main thread transmitter, worker thread receiver
+    let (main_t, worker_r): (mpsc::Sender<WorkPackage>, mpsc::Receiver<WorkPackage>) = mpsc::channel();
+
 
     let queue_info = vec![vk::DeviceQueueCreateInfoBuilder::new()
         .queue_family_index(queue_family)
@@ -655,9 +679,13 @@ unsafe fn routine_pure_procedural
                     *control_flow = ControlFlow::Exit
                 },
                 (winit::event::VirtualKeyCode::Space, ElementState::Released) => {
+                    // Todo: We'll send a message to the state management thread for 
+                    // all of these control inputs.  Won't save so much for the variables,
+                    // It will also save all the transform camera calls, maybe not much
                     button_push[frame] = true;
                 },
                 (winit::event::VirtualKeyCode::Right, ElementState::Pressed) => {
+                    
                     control_input.roll += 1;
                 },
                 (winit::event::VirtualKeyCode::Left, ElementState::Pressed) => {
@@ -682,6 +710,11 @@ unsafe fn routine_pure_procedural
             _ => (),
         },
         Event::MainEventsCleared => {
+
+
+            transform_camera(&mut camera, &mut push_constant.view, &mut control_input);
+
+
             device.wait_for_fences(&[in_flight_fences[frame]], true, u64::MAX).unwrap();
             let image_index = device.acquire_next_image_khr
             (
@@ -696,7 +729,7 @@ unsafe fn routine_pure_procedural
 
 
 
-            transform_camera(&mut camera, &mut push_constant.view, &mut control_input);
+            // transform_camera(&mut camera, &mut push_constant.view, &mut control_input);
 
             // push_constant = update_push_constants(push_constant, delta_time).unwrap();
             // if button_push[frame] {
@@ -723,6 +756,9 @@ unsafe fn routine_pure_procedural
             let cb_2 = cb_2s[image_index as usize];
             let framebuffer = swapchain_framebuffers[image_index as usize];
 
+
+
+
             let cb_34 = record_cb_218
             (
                 &device,
@@ -748,27 +784,6 @@ unsafe fn routine_pure_procedural
                 vertices_grid.len() as u32,
             ).unwrap();
 
-            // record_cb_111
-            // (
-            //     command_pool,
-            //     command_buffer,
-            //     cb_2,
-            //     &device,
-            //     render_pass,
-            //     framebuffer,
-            //     swapchain_image_extent,
-            //     pipeline,
-            //     pipeline_layout,
-            //     pipeline_grid,
-            //     pipeline_layout_grid,
-            //     &indices_terr,
-            //     d_sets.clone(),
-            //     vb,
-            //     vb_grid,
-            //     ib,
-            //     push_constant,
-            // );
-
             let cbs_35 = [cb_34];
             let signal_semaphores = vec![render_finished_semaphores[frame]];
             let submit_info = vk::SubmitInfoBuilder::new()
@@ -790,11 +805,15 @@ unsafe fn routine_pure_procedural
                 .image_indices(&image_indices);
             device.queue_present_khr(queue, &present_info).unwrap();
             frame = (frame + 1) % FRAMES_IN_FLIGHT;
-
-
-
-
         }
+
+
+
+
+
+
+
+        
         Event::LoopDestroyed => unsafe {
             device.device_wait_idle().unwrap();
             for &semaphore in image_available_semaphores
@@ -1168,11 +1187,7 @@ unsafe fn record_cb_218
 -> Result<(vk::CommandBuffer), &'a str>
 {
 
-
     device.reset_command_pool(command_pool, vk::CommandPoolResetFlags::empty()).unwrap();
-
-
-
 
     // Starting with a secondary command buffer, the grid drawing command buffer,
     // which uses its own pipeline and layout.
@@ -1199,7 +1214,7 @@ unsafe fn record_cb_218
     device.cmd_bind_pipeline(grid_cb, vk::PipelineBindPoint::GRAPHICS, grid_pipeline);
     device.cmd_bind_vertex_buffers(grid_cb, 0, &[vb_grid], &[0]);
 
-    // device.cmd_bind_descriptor_sets(grid_cb, vk::PipelineBindPoint::GRAPHICS, grid_pipeline_layout, 0, &d_sets, &[]);
+    // device.cmd_bind_descriptor_sets(griald_cb, vk::PipelineBindPoint::GRAPHICS, grid_pipeline_layout, 0, &d_sets, &[]);
 
 
     device.cmd_draw(grid_cb, grid_cb_vertex_count, grid_cb_vertex_count / 2, 0, 0);
