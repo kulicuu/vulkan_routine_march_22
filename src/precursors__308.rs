@@ -1,17 +1,6 @@
 #![feature(drain_filter)]
 
-
-mod vulkan_6400;
-mod vulkan_6300;
-mod precursors;
-mod pipeline_101;
-mod pipeline_102;
-
-
-use vulkan_6400::*;
-use vulkan_6300::*;
-
-
+use super::precursors::*;
 
 use erupt::{
     cstr,
@@ -55,19 +44,43 @@ use winit::{
     window::Window
 };
 
+
 use structopt::StructOpt;
-const TITLE: &str = "vulkan-routine-6300";
 
 
-fn main() {
-
-    unsafe { vulkan_routine_6400() };
-    // unsafe { vulkan_routine_6300() };
-
-
-
-
-
-
-    
+#[derive(Debug, StructOpt)]
+struct Opt {
+    #[structopt(short, long)]
+    validation_layers: bool,
 }
+
+
+
+
+
+
+
+pub unsafe fn vulkan_foundation_pieces
+<'a>
+()
+-> Result<(
+    Opt,
+    EventLoop,
+    WindowBuilder,
+    
+    
+), &'a str>
+{
+    let opt = Opt { validation_layers: true };
+    let event_loop = EventLoop::new();
+    let window = WindowBuilder::new()
+        .with_title(TITLE)
+        .with_resizable(false)
+        .with_maximized(true)
+        
+        .build(&event_loop)
+        .unwrap();
+
+
+}
+
