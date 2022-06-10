@@ -214,106 +214,36 @@ pub unsafe fn vulkan_routine_8400
         .enabled_extension_names(&device_extensions)
         .enabled_layer_names(&device_layers);
 
-    // let device = Arc::new(Mutex::new(DeviceLoader::new(&instance, physical_device, &device_info).unwrap()));
+    let device = Arc::new(Mutex::new(DeviceLoader::new(&instance, physical_device, &device_info).unwrap()));
+
+    let c1 = closure!(clone device, ||{
+        // device;    
+        // let queue = device.get_device_queue(queue_family, 0);
 
 
-    // Record command buffer thread.
-//     thread::spawn(closure!(clone device, || {
+        // https://docs.rs/closure/0.3.0/closure/
+        // let &(ref lock, ref cvar) = &*pair;
+        // let mut started = lock.lock().unwrap();
+        // *started = true;
+        // // We notify the condvar that the value has changed.
+        // cvar.notify_one();
 
-//         // let queue = device.get_device_queue(queue_family, 0);
-
-
-//         unsafe fn record_cb_111
-//         <'a>
-//         (
-//             command_pool: vk::CommandPool,
-//             command_buffer: vk::CommandBuffer,
-//             cb_2: vk::CommandBuffer,
-//             device: &erupt::DeviceLoader,
-//             render_pass: vk::RenderPass,
-//             framebuffer: vk::Framebuffer,
-//             swapchain_image_extent: vk::Extent2D,
-//             pipeline: vk::Pipeline,
-//             pipeline_layout: vk::PipelineLayout,
-//             pipeline_grid: vk::Pipeline,
-//             pipeline_layout_grid: vk::PipelineLayout,
-//             indices_terr: &Vec<u32>,
-//             d_sets: erupt::SmallVec<vk::DescriptorSet>,
-//             vb: vk::Buffer,
-//             vb_grid: vk::Buffer,
-//             ib: vk::Buffer,
-//             push_constant: PushConstants,
-//         )
-//         -> Result<(), &'a str>
-//         {
+        let device = &*device;
 
 
-
-//             // device.reset_command_pool(command_pool, vk::CommandPoolResetFlags::empty()).unwrap();
-            
-//             // let inheritance_info = vk::CommandBufferInheritanceInfoBuilder::new()
-//             //     .render_pass(render_pass)
-//             //     .subpass(0)
-//             //     .framebuffer(framebuffer);
-
-//             // let cb_2_begin_info = vk::CommandBufferBeginInfoBuilder::new()
-//             //     .flags(vk::CommandBufferUsageFlags::RENDER_PASS_CONTINUE)
-//             //     .inheritance_info(&inheritance_info);
-//             // device.begin_command_buffer(cb_2, &cb_2_begin_info).unwrap();
+        let queue = device.lock().unwrap().get_device_queue(2, 0);
+        true
+    });
 
 
+    thread::spawn(c1);
 
-//             let cmd_buf_begin_info = vk::CommandBufferBeginInfoBuilder::new();
-//             device.begin_command_buffer(command_buffer, &cmd_buf_begin_info).unwrap();
-//             let clear_values = vec![
-//                 vk::ClearValue {
-//                     color: vk::ClearColorValue {
-//                         float32: [0.0, 0.0, 0.0, 1.0],
-//                     },
-//                 },
-//                 vk::ClearValue {
-//                     depth_stencil: vk::ClearDepthStencilValue {
-//                         depth: 1.0,
-//                         stencil: 0,
-//                     },
-//                 },
-//             ];
-//             let render_pass_begin_info = vk::RenderPassBeginInfoBuilder::new()
-//                 .render_pass(render_pass)
-//                 .framebuffer(framebuffer)
-//                 .render_area(vk::Rect2D {
-//                     offset: vk::Offset2D { x: 0, y: 0 },
-//                     extent: swapchain_image_extent,
-//                 })
-//                 .clear_values(&clear_values);
-//             device.cmd_begin_render_pass(
-//                 command_buffer,
-//                 &render_pass_begin_info,
-//                 vk::SubpassContents::INLINE,
-//             );
-//             device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline);
-//             device.cmd_bind_index_buffer(command_buffer, ib, 0, vk::IndexType::UINT32);
-//             device.cmd_bind_vertex_buffers(command_buffer, 0, &[vb], &[0]);
-//             device.cmd_bind_descriptor_sets(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline_layout, 0, &d_sets, &[]);
-//             let ptr = std::ptr::addr_of!(push_constant.view) as *const c_void;
-//             device.cmd_push_constants
-//             (
-//                 command_buffer,
-//                 pipeline_layout,
-//                 vk::ShaderStageFlags::VERTEX,
-//                 0,
-//                 std::mem::size_of::<PushConstants>() as u32,
-//                 ptr,
-//             );
-//             device.cmd_draw_indexed(command_buffer, (indices_terr.len()) as u32, ((indices_terr.len()) / 3) as u32, 0, 0, 0);
-//             // device.cmd_execute_commands(command_buffer, &[cb_2]);
-//             device.cmd_end_render_pass(command_buffer);
-//             device.end_command_buffer(command_buffer).unwrap();
-//             Ok(())
-//         }
+    // let thread_closure = closure!(move string, ref x, ref mut y, clone rc, |arg: i32| {
 
-//     }));
-// }
+    // let thread_closure = closure!(clone device, || {
+    //     false
+    // };
 
+    // thread::spawn(clone thread_closure);
 
-
+}
