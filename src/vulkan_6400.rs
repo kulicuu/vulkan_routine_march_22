@@ -26,7 +26,7 @@ use std::{
     result::Result,
     result::Result::*,
     string::String,
-    sync::{Arc, Mutex, mpsc, mpsc::channel, Condvar},
+    sync::{Arc, Mutex, mpsc, mpsc::channel},
     thread,
     time,
 };
@@ -48,9 +48,6 @@ use winit::{
     window::WindowBuilder,
     window::Window
 };
-
-
-use closure::closure;
 
 
 use structopt::StructOpt;
@@ -321,45 +318,6 @@ pub unsafe fn vulkan_routine_6400
     let physical_device_memory_properties = instance.get_physical_device_memory_properties(physical_device);
 
 
-    // let ib = buffer_indices
-    // (
-    //     &device,
-    //     queue,
-    //     command_pool,
-    //     &mut indices_terr,
-    // ).unwrap();
-    
-    // let vb = buffer_vertices
-    // (
-    //     &device,
-    //     queue,
-    //     command_pool,
-    //     &mut vertices_terr, 
-    // ).unwrap();
-
-    // let vb_grid = buffer_vertices
-    // (
-    //     &device,
-    //     queue,
-    //     command_pool,
-    //     &mut vertices_grid,
-    // ).unwrap();
-
-    // let info = vk::DescriptorSetLayoutBindingFlagsCreateInfoBuilder::new()
-    //     .binding_flags(&[vk::DescriptorBindingFlags::empty()]);
-
-    // let samplers = [vk::Sampler::null()];
-    // let binding = vk::DescriptorSetLayoutBindingBuilder::new()
-    //     .binding(0)
-    //     .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-    //     .descriptor_count(1)
-    //     .stage_flags(vk::ShaderStageFlags::VERTEX)
-    //     .immutable_samplers(&samplers);
-    // let bindings = &[binding];
-    // let info = vk::DescriptorSetLayoutCreateInfoBuilder::new()
-    //     .flags(vk::DescriptorSetLayoutCreateFlags::empty()) 
-    //     .bindings(bindings);
-    // let descriptor_set_layout = device.create_descriptor_set_layout(&info, None).unwrap();
 
 
 //999999--------------------------------------------------------
@@ -369,183 +327,18 @@ pub unsafe fn vulkan_routine_6400
 
 
 
-    let (tx, rx) = channel();
+    // let (tx, rx) = channel();
 
-    let (tx2, rx2) = channel();
-
-    let pair = Arc::new((Mutex::new(false), Condvar::new()));
-
-    thread::spawn(closure!(clone pair, || {
-        // let &(ref lock, ref cvar) = &*pair;
-        // let mut started = lock.lock().unwrap();
-        // *started = true;
-        // // We notify the condvar that the value has changed.
-        // cvar.notify_one();
-
-
-        tx.send(10).unwrap();
+    // let (tx2, rx2) = channel();
 
 
 
-        println!("device {:?}", device);
 
-        unsafe fn record_cb_111
-        <'a>
-        (
-            command_pool: vk::CommandPool,
-            command_buffer: vk::CommandBuffer,
-            cb_2: vk::CommandBuffer,
-            device: &erupt::DeviceLoader,
-            render_pass: vk::RenderPass,
-            framebuffer: vk::Framebuffer,
-            swapchain_image_extent: vk::Extent2D,
-            pipeline: vk::Pipeline,
-            pipeline_layout: vk::PipelineLayout,
-            pipeline_grid: vk::Pipeline,
-            pipeline_layout_grid: vk::PipelineLayout,
-            indices_terr: &Vec<u32>,
-            d_sets: erupt::SmallVec<vk::DescriptorSet>,
-            vb: vk::Buffer,
-            vb_grid: vk::Buffer,
-            ib: vk::Buffer,
-            push_constant: PushConstants,
-        )
-        -> Result<(), &'a str>
-        {
-            let cmd_buf_begin_info = vk::CommandBufferBeginInfoBuilder::new();
-            device.begin_command_buffer(command_buffer, &cmd_buf_begin_info).unwrap();
-            let clear_values = vec![
-                vk::ClearValue {
-                    color: vk::ClearColorValue {
-                        float32: [0.0, 0.0, 0.0, 1.0],
-                    },
-                },
-                vk::ClearValue {
-                    depth_stencil: vk::ClearDepthStencilValue {
-                        depth: 1.0,
-                        stencil: 0,
-                    },
-                },
-            ];
-            let render_pass_begin_info = vk::RenderPassBeginInfoBuilder::new()
-                .render_pass(render_pass)
-                .framebuffer(framebuffer)
-                .render_area(vk::Rect2D {
-                    offset: vk::Offset2D { x: 0, y: 0 },
-                    extent: swapchain_image_extent,
-                })
-                .clear_values(&clear_values);
-            device.cmd_begin_render_pass(
-                command_buffer,
-                &render_pass_begin_info,
-                vk::SubpassContents::INLINE,
-            );
-            device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline);
-            device.cmd_bind_index_buffer(command_buffer, ib, 0, vk::IndexType::UINT32);
-            device.cmd_bind_vertex_buffers(command_buffer, 0, &[vb], &[0]);
-            device.cmd_bind_descriptor_sets(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline_layout, 0, &d_sets, &[]);
-            let ptr = std::ptr::addr_of!(push_constant.view) as *const c_void;
-            device.cmd_push_constants
-            (
-                command_buffer,
-                pipeline_layout,
-                vk::ShaderStageFlags::VERTEX,
-                0,
-                std::mem::size_of::<PushConstants>() as u32,
-                ptr,
-            );
-            device.cmd_draw_indexed(command_buffer, (indices_terr.len()) as u32, ((indices_terr.len()) / 3) as u32, 0, 0, 0);
-            device.cmd_end_render_pass(command_buffer);
-            device.end_command_buffer(command_buffer).unwrap();
-            Ok(())
-        }
-    }));
+    // assert_eq!(rx.recv().unwrap(), 10);
 
 
-    // thread::spawn(move || {
-    //     tx.send(10).unwrap();
-
-
-
-    //     println!("device {:?}", device);
-
-    //     unsafe fn record_cb_111
-    //     <'a>
-    //     (
-    //         command_pool: vk::CommandPool,
-    //         command_buffer: vk::CommandBuffer,
-    //         cb_2: vk::CommandBuffer,
-    //         device: &erupt::DeviceLoader,
-    //         render_pass: vk::RenderPass,
-    //         framebuffer: vk::Framebuffer,
-    //         swapchain_image_extent: vk::Extent2D,
-    //         pipeline: vk::Pipeline,
-    //         pipeline_layout: vk::PipelineLayout,
-    //         pipeline_grid: vk::Pipeline,
-    //         pipeline_layout_grid: vk::PipelineLayout,
-    //         indices_terr: &Vec<u32>,
-    //         d_sets: erupt::SmallVec<vk::DescriptorSet>,
-    //         vb: vk::Buffer,
-    //         vb_grid: vk::Buffer,
-    //         ib: vk::Buffer,
-    //         push_constant: PushConstants,
-    //     )
-    //     -> Result<(), &'a str>
-    //     {
-    //         let cmd_buf_begin_info = vk::CommandBufferBeginInfoBuilder::new();
-    //         device.begin_command_buffer(command_buffer, &cmd_buf_begin_info).unwrap();
-    //         let clear_values = vec![
-    //             vk::ClearValue {
-    //                 color: vk::ClearColorValue {
-    //                     float32: [0.0, 0.0, 0.0, 1.0],
-    //                 },
-    //             },
-    //             vk::ClearValue {
-    //                 depth_stencil: vk::ClearDepthStencilValue {
-    //                     depth: 1.0,
-    //                     stencil: 0,
-    //                 },
-    //             },
-    //         ];
-    //         let render_pass_begin_info = vk::RenderPassBeginInfoBuilder::new()
-    //             .render_pass(render_pass)
-    //             .framebuffer(framebuffer)
-    //             .render_area(vk::Rect2D {
-    //                 offset: vk::Offset2D { x: 0, y: 0 },
-    //                 extent: swapchain_image_extent,
-    //             })
-    //             .clear_values(&clear_values);
-    //         device.cmd_begin_render_pass(
-    //             command_buffer,
-    //             &render_pass_begin_info,
-    //             vk::SubpassContents::INLINE,
-    //         );
-    //         device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline);
-    //         device.cmd_bind_index_buffer(command_buffer, ib, 0, vk::IndexType::UINT32);
-    //         device.cmd_bind_vertex_buffers(command_buffer, 0, &[vb], &[0]);
-    //         device.cmd_bind_descriptor_sets(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline_layout, 0, &d_sets, &[]);
-    //         let ptr = std::ptr::addr_of!(push_constant.view) as *const c_void;
-    //         device.cmd_push_constants
-    //         (
-    //             command_buffer,
-    //             pipeline_layout,
-    //             vk::ShaderStageFlags::VERTEX,
-    //             0,
-    //             std::mem::size_of::<PushConstants>() as u32,
-    //             ptr,
-    //         );
-    //         device.cmd_draw_indexed(command_buffer, (indices_terr.len()) as u32, ((indices_terr.len()) / 3) as u32, 0, 0, 0);
-    //         device.cmd_end_render_pass(command_buffer);
-    //         device.end_command_buffer(command_buffer).unwrap();
-    //         Ok(())
-    //     }
-    // });
-
-    assert_eq!(rx.recv().unwrap(), 10);
-
-
-    tx2.send(15);
-    tx2.send(167);
+    // tx2.send(15);
+    // tx2.send(167);
 
 
 
@@ -553,127 +346,17 @@ pub unsafe fn vulkan_routine_6400
 
 
 
-    // let ib = buffer_indices
-    // (
-    //     &device,
-    //     queue,
-    //     command_pool,
-    //     &mut indices_terr,
-    // ).unwrap();
+
+
+
+
+
+
     
-    // let vb = buffer_vertices
-    // (
-    //     &device,
-    //     queue,
-    //     command_pool,
-    //     &mut vertices_terr, 
-    // ).unwrap();
-
-    // let vb_grid = buffer_vertices
-    // (
-    //     &device,
-    //     queue,
-    //     command_pool,
-    //     &mut vertices_grid,
-    // ).unwrap();
-
-    // let info = vk::DescriptorSetLayoutBindingFlagsCreateInfoBuilder::new()
-    //     .binding_flags(&[vk::DescriptorBindingFlags::empty()]);
-
-    // let samplers = [vk::Sampler::null()];
-    // let binding = vk::DescriptorSetLayoutBindingBuilder::new()
-    //     .binding(0)
-    //     .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-    //     .descriptor_count(1)
-    //     .stage_flags(vk::ShaderStageFlags::VERTEX)
-    //     .immutable_samplers(&samplers);
-    // let bindings = &[binding];
-    // let info = vk::DescriptorSetLayoutCreateInfoBuilder::new()
-    //     .flags(vk::DescriptorSetLayoutCreateFlags::empty()) 
-    //     .bindings(bindings);
-    // let descriptor_set_layout = device.create_descriptor_set_layout(&info, None).unwrap();
-
-
-
-
-
-
-
-
-
-
 
 }
 
 
 
-
-
-pub fn load_model
-<'a>
-() 
--> Result<(Vec<VertexV3>, Vec<u32>), &'a str> 
-{
-    let model_path: & str = "assets/terrain__002__.obj";
-    let (models, materials) = tobj::load_obj(&model_path, &tobj::LoadOptions::default()).expect("Failed to load model object!");
-    let model = models[0].clone();
-    let materials = materials.unwrap();
-    let material = materials.clone().into_iter().nth(0).unwrap();
-    let mut vertices_terr = vec![];
-    let mesh = model.mesh;
-    let total_vertices_count = mesh.positions.len() / 3;
-    for i in 0..total_vertices_count {
-        let vertex = VertexV3 {
-            pos: [
-                mesh.positions[i * 3],
-                mesh.positions[i * 3 + 1],
-                mesh.positions[i * 3 + 2],
-                1.0,
-            ],
-            color: [0.8, 0.20, 0.30, 0.40],
-        };
-        vertices_terr.push(vertex);
-    };
-    let mut indices_terr_full = mesh.indices.clone(); 
-    let mut indices_terr = vec![];
-    for i in 0..(indices_terr_full.len() / 2) {
-        indices_terr.push(indices_terr_full[i]);
-    }
-    println!("\n\nBefore {}", indices_terr.len());
-    indices_terr = mesh_cull_9945(indices_terr).unwrap();
-    println!("After: {}\n\n", indices_terr.len());
-    Ok((vertices_terr, indices_terr))
-}
-
-fn mesh_cull_9945
-<'a>
-(
-    mut indices: Vec<u32>,
-)
--> Result <Vec<u32>, &'a str>
-{
-    // let mut jdx : usize = 0;
-    // let mut cool : bool = true;
-    // while cool {
-    //     let start = jdx as usize;
-    //     let end = (jdx + 3) as usize; 
-    //     indices.drain(start..end);
-    //     jdx += 12;
-    //     if jdx > (indices.len()) {
-    //         cool = false;
-    //     }
-    // }
-    indices.drain(15000..);
-    Ok(indices)
-}
-
-
-
-// three threads.
-// one main thread.
-
-// one math thread
-
-// one command buffer recording thread.
 
 

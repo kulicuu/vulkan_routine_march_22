@@ -15,7 +15,7 @@ nalgebra-glm = "0.12"
 winit     = "0.26.1"
 num-complex = "0.4.0"
 erupt = { path = "../erupt/erupt" }
-
+closure = "0.3.0"
 structopt = "0.3"
 bytemuck = "1.5"
 
