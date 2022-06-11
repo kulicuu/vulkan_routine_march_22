@@ -1,8 +1,10 @@
 // #![feature(drain_filter)]
 
-use super::precursors::*;
-use super::pipeline_101::*;
-use super::pipeline_102::*;
+
+use super::startup_vulkan::*;
+// use super::precursors::*;
+// use super::pipeline_101::*;
+// use super::pipeline_102::*;
 
 use erupt::{
     cstr,
@@ -117,10 +119,13 @@ unsafe extern "system" fn debug_callback(
 }
 
 
-pub unsafe fn vulkan_routine_8400
+pub unsafe fn vulkan_routine_8500
 ()
 {
-    println!("\nSTART________________________________8400\n");
+    println!("\nSTART________________________________8500\n");
+
+
+
     let opt = Opt { validation_layers: false };
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
@@ -301,95 +306,3 @@ pub unsafe fn vulkan_routine_8400
 
 
 
-
-
-
-
-unsafe fn record_cb_111
-<'a>
-(
-    command_pool: vk::CommandPool,
-    command_buffer: vk::CommandBuffer,
-    cb_2: vk::CommandBuffer,
-    device: &erupt::DeviceLoader,
-    render_pass: vk::RenderPass,
-    framebuffer: vk::Framebuffer,
-    swapchain_image_extent: vk::Extent2D,
-    pipeline: vk::Pipeline,
-    pipeline_layout: vk::PipelineLayout,
-    pipeline_grid: vk::Pipeline,
-    pipeline_layout_grid: vk::PipelineLayout,
-    indices_terr: &Vec<u32>,
-    d_sets: erupt::SmallVec<vk::DescriptorSet>,
-    vb: vk::Buffer,
-    vb_grid: vk::Buffer,
-    ib: vk::Buffer,
-    push_constant: PushConstants,
-)
--> Result<(), &'a str>
-{
-
-
-
-    // device.reset_command_pool(command_pool, vk::CommandPoolResetFlags::empty()).unwrap();
-    
-    // let inheritance_info = vk::CommandBufferInheritanceInfoBuilder::new()
-    //     .render_pass(render_pass)
-    //     .subpass(0)
-    //     .framebuffer(framebuffer);
-
-    // let cb_2_begin_info = vk::CommandBufferBeginInfoBuilder::new()
-    //     .flags(vk::CommandBufferUsageFlags::RENDER_PASS_CONTINUE)
-    //     .inheritance_info(&inheritance_info);
-    // device.begin_command_buffer(cb_2, &cb_2_begin_info).unwrap();
-
-
-
-    let cmd_buf_begin_info = vk::CommandBufferBeginInfoBuilder::new();
-    device.begin_command_buffer(command_buffer, &cmd_buf_begin_info).unwrap();
-    let clear_values = vec![
-        vk::ClearValue {
-            color: vk::ClearColorValue {
-                float32: [0.0, 0.0, 0.0, 1.0],
-            },
-        },
-        vk::ClearValue {
-            depth_stencil: vk::ClearDepthStencilValue {
-                depth: 1.0,
-                stencil: 0,
-            },
-        },
-    ];
-    let render_pass_begin_info = vk::RenderPassBeginInfoBuilder::new()
-        .render_pass(render_pass)
-        .framebuffer(framebuffer)
-        .render_area(vk::Rect2D {
-            offset: vk::Offset2D { x: 0, y: 0 },
-            extent: swapchain_image_extent,
-        })
-        .clear_values(&clear_values);
-    device.cmd_begin_render_pass(
-        command_buffer,
-        &render_pass_begin_info,
-        vk::SubpassContents::INLINE,
-    );
-    device.cmd_bind_pipeline(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline);
-    device.cmd_bind_index_buffer(command_buffer, ib, 0, vk::IndexType::UINT32);
-    device.cmd_bind_vertex_buffers(command_buffer, 0, &[vb], &[0]);
-    device.cmd_bind_descriptor_sets(command_buffer, vk::PipelineBindPoint::GRAPHICS, pipeline_layout, 0, &d_sets, &[]);
-    let ptr = std::ptr::addr_of!(push_constant.view) as *const c_void;
-    device.cmd_push_constants
-    (
-        command_buffer,
-        pipeline_layout,
-        vk::ShaderStageFlags::VERTEX,
-        0,
-        std::mem::size_of::<PushConstants>() as u32,
-        ptr,
-    );
-    device.cmd_draw_indexed(command_buffer, (indices_terr.len()) as u32, ((indices_terr.len()) / 3) as u32, 0, 0, 0);
-    // device.cmd_execute_commands(command_buffer, &[cb_2]);
-    device.cmd_end_render_pass(command_buffer);
-    device.end_command_buffer(command_buffer).unwrap();
-    Ok(())
-}
