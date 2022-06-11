@@ -6,8 +6,10 @@ use super::utilities::*;
 use super::buffer_ops::buffer_indices::*;
 use super::buffer_ops::buffer_vertices::*;
 use super::buffer_ops::create_buffer::*;
+use super::buffer_ops::update_uniform_buffer::*;
+// use super::spatial_transforms::camera::*;
 
-
+use crate::spatial_transforms::camera::*;
 use crate::data_structures::vertex_v3::VertexV3;
 
 use erupt::{
@@ -78,14 +80,6 @@ struct FrameData {
 #[derive(Clone, Debug, Copy)]
 struct PushConstants {
     view: glm::Mat4,
-}
-
-#[repr(C)]
-#[derive(Clone, Debug, Copy)]
-struct UniformBufferObject {
-    model: Matrix4<f32>,
-    view: Matrix4<f32>,
-    proj: Matrix4<f32>,
 }
 
 #[derive(Debug, StructOpt)]
@@ -477,6 +471,83 @@ pub unsafe fn vulkan_routine_8700
             proj
         },
     };
+
+
+    let scalar_33 = 100000.0;
+    let camera_location = glm::vec3(1.0 / scalar_33, 1.0 / scalar_33, 1.0 / scalar_33);
+    let image_target = glm::vec3(0.0, 0.0, 0.0);
+
+    let roll_axis_normal: glm::Vec3 = glm::normalize(&(camera_location - image_target));
+    let yaw_axis_normal: glm::Vec3 = glm::vec3(0.0, 1.0, 0.0);  // Also known as the 'up' vector.
+    let pitch_axis_normal: glm::Vec3 = glm::cross(&roll_axis_normal, &yaw_axis_normal);
+
+
+    let mut camera = Camera {
+        position: camera_location,
+        attitude: Attitude {
+            roll_axis_normal,
+            pitch_axis_normal,
+            yaw_axis_normal, 
+        }
+    };
+
+
+    let mut view: glm::Mat4 = glm::look_at::<f32>
+    (
+        &camera_location,
+        &image_target,
+        &yaw_axis_normal,
+    );
+    let mut push_constant = PushConstants {
+        view: view,
+    };
+    let pool_size = vk::DescriptorPoolSizeBuilder::new()
+        ._type(vk::DescriptorType::UNIFORM_BUFFER)
+        .descriptor_count(swapchain_image_count as u32);
+    let pool_sizes = &[pool_size];
+    let set_layouts = &[descriptor_set_layout];
+    let pool_info = vk::DescriptorPoolCreateInfoBuilder::new()
+        .pool_sizes(pool_sizes)
+        .max_sets(swapchain_image_count as u32);
+
+    let desc_pool = device.lock().unwrap().create_descriptor_pool(&pool_info, None).unwrap();
+    let d_set_alloc_info = vk::DescriptorSetAllocateInfoBuilder::new()
+        .descriptor_pool(desc_pool)
+        .set_layouts(set_layouts);
+
+    let d_sets = device.lock().unwrap().allocate_descriptor_sets(&d_set_alloc_info).expect("failed in alloc DescriptorSet");
+    let ubo_size = ::std::mem::size_of::<UniformBufferObject>() as u64;
+
+
+    for i in 0..swapchain_image_count {
+        let d_buf_info = vk::DescriptorBufferInfoBuilder::new()
+            .buffer(uniform_buffers[i])
+            .offset(0)
+            .range(ubo_size);
+
+        let d_buf_infos = [d_buf_info];
+
+        let d_write_builder = vk::WriteDescriptorSetBuilder::new()
+            .dst_set(d_sets[0])
+            .dst_binding(0)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .buffer_info(&d_buf_infos);
+
+        let d_write_sets = [d_write_builder];
+
+        device.lock().unwrap().update_descriptor_sets(&d_write_sets, &[]);
+        update_uniform_buffer
+        (
+            device.clone(), 
+            &mut uniform_transform, 
+            &mut uniform_buffers_memories, 
+            &mut uniform_buffers, 
+            i as usize, 
+            2.3
+        );
+
+    }
 
 
     
