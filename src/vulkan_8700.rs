@@ -5,6 +5,7 @@ use super::pipeline_102::*;
 use super::utilities::*;
 use super::buffer_ops::buffer_indices::*;
 use super::buffer_ops::buffer_vertices::*;
+use super::buffer_ops::create_buffer::*;
 
 
 use crate::data_structures::vertex_v3::VertexV3;
@@ -421,6 +422,62 @@ pub unsafe fn vulkan_routine_8700
         command_pool,
         &mut vertices_grid,
     ).unwrap();
+
+    let info = vk::DescriptorSetLayoutBindingFlagsCreateInfoBuilder::new()
+        .binding_flags(&[vk::DescriptorBindingFlags::empty()]);
+
+    let samplers = [vk::Sampler::null()];
+    let binding = vk::DescriptorSetLayoutBindingBuilder::new()
+        .binding(0)
+        .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+        .descriptor_count(1)
+        .stage_flags(vk::ShaderStageFlags::VERTEX)
+        .immutable_samplers(&samplers);
+    let bindings = &[binding];
+    let info = vk::DescriptorSetLayoutCreateInfoBuilder::new()
+        .flags(vk::DescriptorSetLayoutCreateFlags::empty()) 
+        .bindings(bindings);
+    let descriptor_set_layout = device.lock().unwrap().create_descriptor_set_layout(&info, None).unwrap();
+
+    let ubo_size = ::std::mem::size_of::<UniformBufferObject>();
+    let mut uniform_buffers: Vec<vk::Buffer> = vec![];
+    let mut uniform_buffers_memories: Vec<vk::DeviceMemory> = vec![];
+    let swapchain_image_count = swapchain_images.len();
+
+    for _ in 0..swapchain_image_count {
+        let (uniform_buffer, uniform_buffer_memory) = create_buffer(
+            device.clone(),
+            ubo_size as u64,
+            vk::BufferUsageFlags::UNIFORM_BUFFER,
+            2,
+        );
+        uniform_buffers.push(uniform_buffer);
+        uniform_buffers_memories.push(uniform_buffer_memory);
+    }
+    let scalar_22 = 1.5;
+    let mut uniform_transform = UniformBufferObject {
+        model: 
+        // Matrix4::from_translation(Vector3::new(5.0, 5.0, 5.0))
+        Matrix4::from_angle_y(Deg(1.0))
+            * Matrix4::from_nonuniform_scale(scalar_22, scalar_22, scalar_22),
+        view: Matrix4::look_at_rh(
+            Point3::new(0.40, 0.40, 0.40),
+            Point3::new(0.0, 0.0, 0.0),
+            Vector3::new(0.0, 0.0, 1.0),
+        ),
+        proj: {
+            let mut proj = cgmath::perspective(
+                Deg(45.0),
+                swapchain_image_extent.width as f32
+                    / swapchain_image_extent.height as f32,
+                0.1,
+                10.0,
+            );
+            proj[1][1] = proj[1][1] * -1.0;
+            proj
+        },
+    };
+
 
     
 

@@ -47,8 +47,6 @@ use winit::{
 
 
 
-// use super::data_structures::vertex_v3::VertexV3;
-
 
 
 pub unsafe fn buffer_vertices
