@@ -45,7 +45,8 @@ use winit::{
 pub unsafe fn buffer_indices
 <'a>
 (
-    device: &DeviceLoader,
+    device: Arc<Mutex<DeviceLoader>>,
+    // device: &DeviceLoader,
     queue: vk::Queue,
     command_pool: vk::CommandPool,
     indices: &mut Vec<u32>,
@@ -58,34 +59,34 @@ pub unsafe fn buffer_indices
         .size(ib_size)
         .usage(vk::BufferUsageFlags::TRANSFER_SRC)
         .sharing_mode(vk::SharingMode::EXCLUSIVE);
-    let sb = device.create_buffer(&info, None).expect("Failed to create a staging buffer.");
-    let mem_reqs = device.get_buffer_memory_requirements(sb);
+    let sb = device.lock().unwrap().create_buffer(&info, None).expect("Failed to create a staging buffer.");
+    let mem_reqs = device.lock().unwrap().get_buffer_memory_requirements(sb);
     let info = vk::MemoryAllocateInfoBuilder::new()
         .allocation_size(mem_reqs.size)
         .memory_type_index(2);
-    let sb_mem = device.allocate_memory(&info, None).unwrap();
-    device.bind_buffer_memory(sb, sb_mem, 0).unwrap();
-    let data_ptr = device.map_memory(
+    let sb_mem = device.lock().unwrap().allocate_memory(&info, None).unwrap();
+    device.lock().unwrap().bind_buffer_memory(sb, sb_mem, 0).unwrap();
+    let data_ptr = device.lock().unwrap().map_memory(
         sb_mem,
         0,
         vk::WHOLE_SIZE,
         vk::MemoryMapFlags::empty(),
     ).unwrap() as *mut u32;
     data_ptr.copy_from_nonoverlapping(indices.as_ptr(), indices.len());
-    device.unmap_memory(sb_mem);
+    device.lock().unwrap().unmap_memory(sb_mem);
     // Todo: add destruction if this is still working
     let info = vk::BufferCreateInfoBuilder::new()
         .size(ib_size)
         .usage(vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::INDEX_BUFFER)
         .sharing_mode(vk::SharingMode::EXCLUSIVE);
-    let ib = device.create_buffer(&info, None)
+    let ib = device.lock().unwrap().create_buffer(&info, None)
         .expect("Failed to create index buffer.");
     let mem_reqs = device.lock().unwrap().get_buffer_memory_requirements(ib);
     let alloc_info = vk::MemoryAllocateInfoBuilder::new()
         .allocation_size(mem_reqs.size)
         .memory_type_index(1);
-    let ib_mem = device.allocate_memory(&alloc_info, None).unwrap();
-    device.bind_buffer_memory(ib, ib_mem, 0);
+    let ib_mem = device.lock().unwrap().allocate_memory(&alloc_info, None).unwrap();
+    device.lock().unwrap().bind_buffer_memory(ib, ib_mem, 0);
     let info = vk::CommandBufferAllocateInfoBuilder::new()
         .command_pool(command_pool)
         .level(vk::CommandBufferLevel::PRIMARY)
@@ -98,13 +99,13 @@ pub unsafe fn buffer_indices
         .src_offset(0)
         .dst_offset(0)
         .size(ib_size);
-    device.cmd_copy_buffer(cb, sb, ib, &[info]);
+    device.lock().unwrap().cmd_copy_buffer(cb, sb, ib, &[info]);
     let cbs = &[cb];
-    device.end_command_buffer(cb).expect("Failed to end command buffer.");
+    device.lock().unwrap().end_command_buffer(cb).expect("Failed to end command buffer.");
     let info = vk::SubmitInfoBuilder::new()
         .wait_semaphores(&[])
         .command_buffers(cbs)
         .signal_semaphores(&[]);
-    device.queue_submit(queue, &[info], vk::Fence::null()).expect("Failed to queue submit.");
+    device.lock().unwrap().queue_submit(queue, &[info], vk::Fence::null()).expect("Failed to queue submit.");
     Ok(ib)
 }

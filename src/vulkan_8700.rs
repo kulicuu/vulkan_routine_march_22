@@ -405,7 +405,7 @@ pub unsafe fn vulkan_routine_8700
     let physical_device_memory_properties = instance.get_physical_device_memory_properties(physical_device);
     let ib = buffer_indices
     (
-        &device,
+        device,
         queue,
         command_pool,
         &mut indices_terr,
