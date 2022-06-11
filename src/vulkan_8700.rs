@@ -4,8 +4,10 @@ use super::pipeline_101::*;
 use super::pipeline_102::*;
 use super::utilities::*;
 use super::buffer_ops::buffer_indices::*;
+use super::buffer_ops::buffer_vertices::*;
 
 
+use crate::data_structures::vertex_v3::VertexV3;
 
 use erupt::{
     cstr,
@@ -64,12 +66,12 @@ struct FrameData {
     command_pool: vk::CommandPool,
     command_buffer: vk::CommandBuffer,
 }
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct VertexV3 {
-    pos: [f32; 4],
-    color: [f32; 4],
-}
+// #[repr(C)]
+// #[derive(Debug, Clone, Copy)]
+// pub struct VertexV3 {
+//     pos: [f32; 4],
+//     color: [f32; 4],
+// }
 
 #[repr(C)]
 #[derive(Clone, Debug, Copy)]
@@ -405,11 +407,21 @@ pub unsafe fn vulkan_routine_8700
     let physical_device_memory_properties = instance.get_physical_device_memory_properties(physical_device);
     let ib = buffer_indices
     (
-        device,
+        device.clone(),
         queue,
         command_pool,
         &mut indices_terr,
     ).unwrap();
+
+
+    let vb_grid = buffer_vertices
+    (
+        device.clone(),
+        queue,
+        command_pool,
+        &mut vertices_grid,
+    ).unwrap();
+
     
 
 }
@@ -424,17 +436,6 @@ fn mesh_cull_9945
 )
 -> Result <Vec<u32>, &'a str>
 {
-    // let mut jdx : usize = 0;
-    // let mut cool : bool = true;
-    // while cool {
-    //     let start = jdx as usize;
-    //     let end = (jdx + 3) as usize; 
-    //     indices.drain(start..end);
-    //     jdx += 12;
-    //     if jdx > (indices.len()) {
-    //         cool = false;
-    //     }
-    // }
     indices.drain(20000..);
     Ok(indices)
 }

@@ -10,6 +10,7 @@
 mod vulkan_8700;
 mod utilities;
 mod buffer_ops;
+mod data_structures;
 
 mod precursors;
 mod pipeline_101;

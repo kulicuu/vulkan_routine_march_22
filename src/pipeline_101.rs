@@ -31,15 +31,18 @@ use smallvec::SmallVec;
 use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 use memoffset::offset_of;
 
+use crate::data_structures::vertex_v3::VertexV3;
+
+
 const SHADER_VERT: &[u8] = include_bytes!("../spv/s_400_.vert.spv");
 const SHADER_FRAG: &[u8] = include_bytes!("../spv/s1.frag.spv");
 
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct VertexV3 {
-    pos: [f32; 4],
-    color: [f32; 4],
-}
+// #[repr(C)]
+// #[derive(Debug, Clone, Copy)]
+// pub struct VertexV3 {
+//     pos: [f32; 4],
+//     color: [f32; 4],
+// }
 
 pub unsafe fn pipeline_101
 <'a>

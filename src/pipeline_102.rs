@@ -28,12 +28,16 @@ use smallvec::SmallVec;
 use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 use memoffset::offset_of;
 
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct VertexV3 {
-    pos: [f32; 4],
-    color: [f32; 4],
-}
+
+use crate::data_structures::vertex_v3::VertexV3;
+
+
+// #[repr(C)]
+// #[derive(Debug, Clone, Copy)]
+// pub struct VertexV3 {
+//     pos: [f32; 4],
+//     color: [f32; 4],
+// }
 
 pub unsafe fn pipeline_102
 <'a>

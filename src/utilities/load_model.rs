@@ -1,12 +1,13 @@
 use super::mesh_cull::*;
+use crate::data_structures::vertex_v3::VertexV3;
 
 
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct VertexV3 {
-    pos: [f32; 4],
-    color: [f32; 4],
-}
+// #[repr(C)]
+// #[derive(Debug, Clone, Copy)]
+// pub struct VertexV3 {
+//     pos: [f32; 4],
+//     color: [f32; 4],
+// }
 
 
 pub fn load_model
