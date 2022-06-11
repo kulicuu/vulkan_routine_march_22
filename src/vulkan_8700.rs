@@ -7,10 +7,13 @@ use super::buffer_ops::buffer_indices::*;
 use super::buffer_ops::buffer_vertices::*;
 use super::buffer_ops::create_buffer::*;
 use super::buffer_ops::update_uniform_buffer::*;
+use super::pipelines::pipeline_101::*;
+use super::command_buffers::record_cb_218::*;
 // use super::spatial_transforms::camera::*;
 
 use crate::spatial_transforms::camera::*;
 use crate::data_structures::vertex_v3::VertexV3;
+
 
 use erupt::{
     cstr,
@@ -76,11 +79,7 @@ struct FrameData {
 //     color: [f32; 4],
 // }
 
-#[repr(C)]
-#[derive(Clone, Debug, Copy)]
-struct PushConstants {
-    view: glm::Mat4,
-}
+
 
 #[derive(Debug, StructOpt)]
 struct Opt {
@@ -96,14 +95,7 @@ struct OldCamera {
     up: glm::Vec3,  // yaw axis in direction of up
 }
 
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-struct ControlInput {
-    roll: i32,
-    pitch: i32,
-    yaw: i32,
-    skew: i32,
-}
+
 
 // static mut log_300: Vec<String> = vec!();
 unsafe extern "system" fn debug_callback(
@@ -409,13 +401,15 @@ pub unsafe fn vulkan_routine_8700
     ).unwrap();
 
 
-    let vb_grid = buffer_vertices
+    let vb = buffer_vertices
     (
         device.clone(),
         queue,
         command_pool,
-        &mut vertices_grid,
+        &mut vertices_terr, 
     ).unwrap();
+
+
 
     let info = vk::DescriptorSetLayoutBindingFlagsCreateInfoBuilder::new()
         .binding_flags(&[vk::DescriptorBindingFlags::empty()]);
@@ -599,7 +593,269 @@ pub unsafe fn vulkan_routine_8700
         .dependencies(&dependencies);
     let render_pass = device.lock().unwrap().create_render_pass(&render_pass_info, None).unwrap();
 
-    
+    let (
+        pipeline,
+        pipeline_layout,
+        depth_image_view,
+        shader_vert,
+        shader_frag,
+    ) = pipeline_101
+    (
+        device.clone(),
+        &render_pass.clone(),
+        &format,
+        &swapchain_image_extent,
+    ).unwrap();
+
+
+    let swapchain_framebuffers: Vec<_> = swapchain_image_views
+        .iter()
+        .map(|image_view| {
+            let attachments = vec![*image_view, depth_image_view];
+            let framebuffer_info = vk::FramebufferCreateInfoBuilder::new()
+                .render_pass(render_pass)
+                .attachments(&attachments)
+                .width(swapchain_image_extent.width)
+                .height(swapchain_image_extent.height)
+                .layers(1);
+            device.lock().unwrap().create_framebuffer(&framebuffer_info, None).unwrap()
+        })
+        .collect();
+
+    let cmd_buf_allocate_info = vk::CommandBufferAllocateInfoBuilder::new()
+        .command_pool(command_pool)
+        .level(vk::CommandBufferLevel::PRIMARY)
+        .command_buffer_count(swapchain_framebuffers.len() as _);
+    let cmd_bufs = device.lock().unwrap().allocate_command_buffers(&cmd_buf_allocate_info).unwrap();
+
+
+
+    let cb_2_info = vk::CommandBufferAllocateInfoBuilder::new()
+        .command_pool(command_pool)
+        .level(vk::CommandBufferLevel::SECONDARY)
+        .command_buffer_count(swapchain_framebuffers.len() as _);
+    let cb_2s = device.lock().unwrap().allocate_command_buffers(&cb_2_info).unwrap();
+    let mut primary_command_buffers: Vec<vk::CommandBuffer> = vec![];
+    let mut secondary_command_buffers: Vec<vk::CommandBuffer> = vec![];
+    for img_idx in 0..swapchain_framebuffers.len() {
+        let primary_cb_alloc_info = vk::CommandBufferAllocateInfoBuilder::new()
+            .command_pool(command_pools[img_idx])
+            .level(vk::CommandBufferLevel::PRIMARY)
+            .command_buffer_count(1);
+        primary_command_buffers.push(device.lock().unwrap().allocate_command_buffers(&primary_cb_alloc_info).unwrap()[0]);
+        let secondary_cb_alloc_info = vk::CommandBufferAllocateInfoBuilder::new()
+            .command_pool(command_pools[img_idx])
+            .level(vk::CommandBufferLevel::SECONDARY)
+            .command_buffer_count(1);
+        secondary_command_buffers.push(device.lock().unwrap().allocate_command_buffers(&secondary_cb_alloc_info).unwrap()[0]);
+    }
+
+
+    let now = Instant::now();
+    let semaphore_info = vk::SemaphoreCreateInfoBuilder::new();
+    let image_available_semaphores: Vec<_> = (0..FRAMES_IN_FLIGHT)
+        .map(|_| device.lock().unwrap().create_semaphore(&semaphore_info, None).unwrap())
+        .collect();
+    let render_finished_semaphores: Vec<_> = (0..FRAMES_IN_FLIGHT)
+        .map(|_| device.lock().unwrap().create_semaphore(&semaphore_info, None).unwrap())
+        .collect();
+    let fence_info = vk::FenceCreateInfoBuilder::new().flags(vk::FenceCreateFlags::SIGNALED);
+    let in_flight_fences: Vec<_> = (0..FRAMES_IN_FLIGHT)
+        .map(|_| device.lock().unwrap().create_fence(&fence_info, None).unwrap())
+        .collect();
+    let mut images_in_flight: Vec<_> = swapchain_images.iter().map(|_| vk::Fence::null()).collect();
+    let mut frame = 0;
+    let mut button_push: [bool; 2] = [false; 2];
+    let mut control_input = ControlInput {
+        roll: 0,
+        pitch: 0,
+        yaw: 0,
+        skew: 0,
+    };
+
+
+
+
+
+
+    #[allow(clippy::collapsible_match, clippy::single_match)]
+    event_loop.run(move |event, _, control_flow| match event {
+        Event::NewEvents(StartCause::Init) => {
+            *control_flow = ControlFlow::Poll;
+        }
+        Event::WindowEvent { event, .. } => match event {
+            WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+            _ => (),
+        },
+        Event::DeviceEvent { event, .. } => match event {
+            DeviceEvent::Key(KeyboardInput {
+                virtual_keycode: Some(keycode),
+                state,
+                ..
+            }) => match (keycode, state) {
+                (VirtualKeyCode::Escape, ElementState::Released) => {
+                    *control_flow = ControlFlow::Exit
+                },
+                (winit::event::VirtualKeyCode::Space, ElementState::Released) => {
+                    button_push[frame] = true;
+                },
+                (winit::event::VirtualKeyCode::Right, ElementState::Pressed) => {
+                    control_input.roll += 1;
+                },
+                (winit::event::VirtualKeyCode::Left, ElementState::Pressed) => {
+                    control_input.roll -= 1;
+                },
+                (winit::event::VirtualKeyCode::Up, ElementState::Pressed) => {
+                    control_input.pitch -= 1;
+                },
+                (winit::event::VirtualKeyCode::Down, ElementState::Pressed) => {
+                    control_input.pitch += 1;
+                },
+                (winit::event::VirtualKeyCode::Semicolon, ElementState::Pressed) => {
+                    control_input.yaw -= 1;
+                },
+                (winit::event::VirtualKeyCode::Q, ElementState::Pressed) => {
+                    control_input.yaw += 1;
+                },
+                _ => (),
+
+            },
+
+            _ => (),
+        },
+        Event::MainEventsCleared => {
+            device.lock().unwrap().wait_for_fences(&[in_flight_fences[frame]], true, u64::MAX).unwrap();
+            let image_index = device.lock().unwrap().acquire_next_image_khr
+            (
+                swapchain,
+                u64::MAX,
+                image_available_semaphores[frame],
+                vk::Fence::null(),
+            ).unwrap();
+
+
+            let delta_time = now.elapsed().as_secs_f32();
+
+
+
+            transform_camera(&mut camera, &mut push_constant.view, &mut control_input);
+
+            // push_constant = update_push_constants(push_constant, delta_time).unwrap();
+            // if button_push[frame] {
+            //     push_constant = update_push_constants(push_constant, delta_time).unwrap();
+            //     // update_uniform_buffer(&device, &mut uniform_transform, &mut uniform_buffers_memories, &mut uniform_buffers, image_index as usize, 3.2);
+            // }
+            // push_constant.view = 
+            // update_uniform_buffer(&device, &mut uniform_transform, &mut uniform_buffers_memories, &mut uniform_buffers, image_index as usize, 3.2);
+            // push_constant = update_push_constants(push_constant, delta_time).unwrap();
+            // mutate_view_matrix(&mut push_constant.view, &mut control_input);
+
+
+            button_push[frame] = false;
+ 
+            let image_in_flight = images_in_flight[image_index as usize];
+            if !image_in_flight.is_null() {
+                device.lock().unwrap().wait_for_fences(&[image_in_flight], true, u64::MAX).unwrap();
+            }
+            images_in_flight[image_index as usize] = in_flight_fences[frame];
+            let wait_semaphores = vec![image_available_semaphores[frame]];
+            let command_pool = command_pools[image_index as usize];
+
+            let command_buffer = cmd_bufs[image_index as usize];
+            let cb_2 = cb_2s[image_index as usize];
+            let framebuffer = swapchain_framebuffers[image_index as usize];
+
+            let cb_34 = record_cb_218
+            (
+                device.clone(),
+                render_pass,
+                command_pool,
+                pipeline, // primary_pipeline,
+                pipeline_layout,
+                // pipeline_grid, // secondary pipeline for the grid draw.
+                // pipeline_layout_grid,
+                &mut primary_command_buffers,
+                &mut secondary_command_buffers,
+                // &primary_command_buffers[image_index as usize],
+                // &secondary_command_buffers[image_index as usize],
+                &framebuffer,
+                image_index,
+                swapchain_image_extent,
+                &indices_terr,
+                d_sets.clone(),
+                vb,
+                // vb_grid,
+                ib,
+                push_constant,
+                // vertices_grid.len() as u32,
+            ).unwrap();
+
+            let cbs_35 = [cb_34];
+            let signal_semaphores = vec![render_finished_semaphores[frame]];
+            let submit_info = vk::SubmitInfoBuilder::new()
+                .wait_semaphores(&wait_semaphores)
+                .wait_dst_stage_mask(&[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT])
+                .command_buffers(&cbs_35)
+                .signal_semaphores(&signal_semaphores);
+
+            let in_flight_fence = in_flight_fences[frame];
+            device.lock().unwrap().reset_fences(&[in_flight_fence]).unwrap();
+            device.lock().unwrap()
+                .queue_submit(queue, &[submit_info], in_flight_fence)
+                .unwrap();
+            let swapchains = vec![swapchain];
+            let image_indices = vec![image_index];
+            let present_info = vk::PresentInfoKHRBuilder::new()
+                .wait_semaphores(&signal_semaphores)
+                .swapchains(&swapchains)
+                .image_indices(&image_indices);
+            device.lock().unwrap().queue_present_khr(queue, &present_info).unwrap();
+            frame = (frame + 1) % FRAMES_IN_FLIGHT;
+
+        }
+        Event::LoopDestroyed => unsafe {
+            device.lock().unwrap().device_wait_idle().unwrap();
+            for &semaphore in image_available_semaphores
+                .iter()
+                .chain(render_finished_semaphores.iter())
+            {
+                device.lock().unwrap().destroy_semaphore(semaphore, None);
+            }
+            for &fence in &in_flight_fences {
+                device.lock().unwrap().destroy_fence(fence, None);
+            }
+            device.lock().unwrap().destroy_command_pool(command_pool, None);
+            for &framebuffer in &swapchain_framebuffers {
+                device.lock().unwrap().destroy_framebuffer(framebuffer, None);
+            }
+            device.lock().unwrap().destroy_pipeline(pipeline, None);
+            device.lock().unwrap().destroy_render_pass(render_pass, None);
+            device.lock().unwrap().destroy_pipeline_layout(pipeline_layout, None);
+            device.lock().unwrap().destroy_shader_module(shader_vert, None);
+            device.lock().unwrap().destroy_shader_module(shader_frag, None);
+            for &image_view in &swapchain_image_views {
+                device.lock().unwrap().destroy_image_view(image_view, None);
+            }
+            device.lock().unwrap().destroy_swapchain_khr(swapchain, None);
+            device.lock().unwrap().destroy_device(None);
+            instance.destroy_surface_khr(surface, None);
+            // instance.destroy_debug_utils_messenger_ext(messenger, None);
+            // if !messenger.is_null() {
+            //     instance.destroy_debug_utils_messenger_ext(messenger, None);
+            // }
+            instance.destroy_instance(None);
+            println!("Exited cleanly");
+        },
+        _ => (),
+    })
+
+
+
+
+
+
+
+
 
 }
 

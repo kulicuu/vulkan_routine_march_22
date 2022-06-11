@@ -11,7 +11,9 @@ mod vulkan_8700;
 mod utilities;
 mod buffer_ops;
 mod data_structures;
-mod spatial_transforms; 
+mod spatial_transforms;
+mod pipelines;
+mod command_buffers;
 
 mod precursors;
 mod pipeline_101;

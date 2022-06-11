@@ -52,13 +52,61 @@ pub struct Attitude {
     pub yaw_axis_normal: glm::Vec3, // up axis normal
 }
 
-
-
-
-
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct Camera {
     pub attitude: Attitude,
     pub position: glm::Vec3,
+}
+
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct ControlInput {
+    pub roll: i32,
+    pub pitch: i32,
+    pub yaw: i32,
+    pub skew: i32,
+}
+
+pub fn transform_camera
+<'a>
+(
+    camera: &mut Camera,
+    view_matrix: &mut glm::Mat4,
+    control_input: &mut ControlInput,
+)
+-> Result <(), &'a str>
+{
+    let scalar_45 = 0.03;
+    // We are getting quantized packets of inputs, if they were big enough batches we'd ahve to interleave the operations to 
+    // parody instantaneous parallel control inputs.  much yaw followed by much pitch is not the same as both applied simultaneously.
+    camera.attitude.roll_axis_normal = glm::rotate_vec3(&camera.attitude.roll_axis_normal, (control_input.pitch as f32) 
+        * scalar_45, &camera.attitude.pitch_axis_normal);
+    camera.attitude.roll_axis_normal = glm::rotate_vec3(&camera.attitude.roll_axis_normal, (control_input.yaw as f32) 
+        * scalar_45, &camera.attitude.yaw_axis_normal);
+    camera.attitude.pitch_axis_normal = glm::rotate_vec3(&camera.attitude.pitch_axis_normal, (control_input.roll as f32) 
+        * scalar_45, &camera.attitude.roll_axis_normal);
+    camera.attitude.pitch_axis_normal = glm::rotate_vec3(&camera.attitude.pitch_axis_normal, (control_input.yaw as f32) 
+        * scalar_45, &camera.attitude.yaw_axis_normal);
+    camera.attitude.yaw_axis_normal = glm::rotate_vec3(&camera.attitude.yaw_axis_normal, (control_input.roll as f32) 
+        * scalar_45, &camera.attitude.roll_axis_normal);
+    camera.attitude.yaw_axis_normal = glm::rotate_vec3(&camera.attitude.yaw_axis_normal, (control_input.pitch as f32) 
+        * scalar_45, &camera.attitude.pitch_axis_normal);
+
+    *view_matrix = glm::look_at::<f32>
+    (
+        &camera.position,
+        &(&camera.position + &camera.attitude.roll_axis_normal),
+        &camera.attitude.yaw_axis_normal,
+    );
+
+    *control_input = ControlInput {
+        roll: 0,
+        pitch: 0,
+        yaw: 0,
+        skew: 0
+    };
+
+    Ok(())
 }
