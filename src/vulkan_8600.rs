@@ -636,8 +636,6 @@ pub unsafe fn vulkan_routine_8600
         &swapchain_image_extent,
     ).unwrap();
 
-
-
     let (
         pipeline_grid,
         pipeline_layout_grid,
@@ -649,7 +647,6 @@ pub unsafe fn vulkan_routine_8600
         &format,
         &swapchain_image_extent,
     ).unwrap();
-
 
     let swapchain_framebuffers: Vec<_> = swapchain_image_views
         .iter()

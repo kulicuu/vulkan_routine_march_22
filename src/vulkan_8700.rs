@@ -446,7 +446,6 @@ pub unsafe fn vulkan_routine_8700
         },
     };
 
-
     let scalar_33 = 100000.0;
     let camera_location = glm::vec3(1.0 / scalar_33, 1.0 / scalar_33, 1.0 / scalar_33);
     let image_target = glm::vec3(0.0, 0.0, 0.0);
@@ -454,7 +453,6 @@ pub unsafe fn vulkan_routine_8700
     let roll_axis_normal: glm::Vec3 = glm::normalize(&(camera_location - image_target));
     let yaw_axis_normal: glm::Vec3 = glm::vec3(0.0, 1.0, 0.0);  // Also known as the 'up' vector.
     let pitch_axis_normal: glm::Vec3 = glm::cross(&roll_axis_normal, &yaw_axis_normal);
-
 
     let mut camera = Camera {
         position: camera_location,
@@ -634,7 +632,6 @@ pub unsafe fn vulkan_routine_8700
         secondary_command_buffers.push(device.lock().unwrap().allocate_command_buffers(&secondary_cb_alloc_info).unwrap()[0]);
     }
 
-
     let now = Instant::now();
     let semaphore_info = vk::SemaphoreCreateInfoBuilder::new();
     let image_available_semaphores: Vec<_> = (0..FRAMES_IN_FLIGHT)
@@ -659,20 +656,19 @@ pub unsafe fn vulkan_routine_8700
 
 
 
-
+    // let command_pool_cursor = Arc::new(Mutex::new())
 
     let rec_cb_closure = closure!(
         clone device,
+        
+        
+        
         clone record_cb_219,
         ||
     {
         // println!("{:?} {:?}", record_cb_218, device);
 
-
-
-
     });
-
 
 
     #[allow(clippy::collapsible_match, clippy::single_match)]
