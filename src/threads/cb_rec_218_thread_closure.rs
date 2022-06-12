@@ -1,34 +1,4 @@
-// #![feature(drain_filter)]
 
-
-// mod vulkan_6400;
-// mod vulkan_6300;
-// mod vulkan_8300;
-// mod vulkan_8400;
-// mod vulkan_8500;
-// mod vulkan_8600;
-mod vulkan_8700;
-mod utilities;
-mod buffer_ops;
-mod data_structures;
-mod spatial_transforms;
-mod pipelines;
-mod command_buffers;
-mod threads;
-
-mod precursors;
-mod pipeline_101;
-mod pipeline_102;
-// mod startup_vulkan;
-
-
-use vulkan_8700::*;
-// use vulkan_8600::*;
-// use vulkan_8500::*;
-// use vulkan_8400::*;
-// use vulkan_8300::*;
-// use vulkan_6400::*;
-// use vulkan_6300::*;
 
 
 
@@ -62,7 +32,7 @@ use std::thread::sleep;
 use smallvec::SmallVec;
 use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
 use memoffset::offset_of;
-use simple_logger::SimpleLogger;
+use simple_logger::SimpleLogger;    
 use winit::{
     dpi::PhysicalSize,
     event::{
@@ -75,19 +45,18 @@ use winit::{
     window::Window
 };
 
-use structopt::StructOpt;
-const TITLE: &str = "vulkan-routine";
+use closure::closure;
 
 
-fn main() {
-    unsafe { vulkan_routine_8700() }; 
-    // unsafe { vulkan_routine_8600() }; 
-    // unsafe { vulkan_routine_8500() };
-    // unsafe { vulkan_routine_8400() };
-    // unsafe { vulkan_routine_8300() };
-    // unsafe { vulkan_routine_6400() };
-    
-    // unsafe { vulkan_routine_6300() };
+// pub unsafe fn get_thread_closure
+// <'a>
+// ()
+// -> Result<(dyn Fn(u32) -> u32), &'a str>
+// {
+//     Ok(
+//         closure!(|| {})
+//     )
+   
+// }
 
-    
-}
+

@@ -48,7 +48,7 @@ pub unsafe fn pipeline_101
 <'a>
 (
     device: Arc<Mutex<DeviceLoader>>,
-    render_pass: &vk::RenderPass,
+    render_pass: Arc<Mutex<vk::RenderPass>>,
     format: &vk::SurfaceFormatKHR,
     swapchain_image_extent: &vk::Extent2D,
 )
@@ -239,7 +239,7 @@ pub unsafe fn pipeline_101
         .multisample_state(&multisampling)
         .color_blend_state(&color_blending)
         .layout(pipeline_layout)
-        .render_pass(*render_pass)
+        .render_pass(*render_pass.lock().unwrap())
         .subpass(0);
     let pipeline = device.lock().unwrap().create_graphics_pipelines(vk::PipelineCache::null(), &[pipeline_info], None).unwrap()[0];
 

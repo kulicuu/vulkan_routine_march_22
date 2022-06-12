@@ -9,11 +9,11 @@ use super::buffer_ops::create_buffer::*;
 use super::buffer_ops::update_uniform_buffer::*;
 use super::pipelines::pipeline_101::*;
 use super::command_buffers::record_cb_218::*;
+use super::command_buffers::record_cb_219::*;
 // use super::spatial_transforms::camera::*;
 
 use crate::spatial_transforms::camera::*;
 use crate::data_structures::vertex_v3::VertexV3;
-
 
 use erupt::{
     cstr,
@@ -72,30 +72,12 @@ struct FrameData {
     command_pool: vk::CommandPool,
     command_buffer: vk::CommandBuffer,
 }
-// #[repr(C)]
-// #[derive(Debug, Clone, Copy)]
-// pub struct VertexV3 {
-//     pos: [f32; 4],
-//     color: [f32; 4],
-// }
-
-
 
 #[derive(Debug, StructOpt)]
 struct Opt {
     #[structopt(short, long)]
     validation_layers: bool,
 }
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-struct OldCamera {
-    location: glm::Vec3,
-    target: glm::Vec3,  // not necessarily normalized, this one to one with the look_at (or look_at_rh) function.
-    up: glm::Vec3,  // yaw axis in direction of up
-}
-
-
 
 // static mut log_300: Vec<String> = vec!();
 unsafe extern "system" fn debug_callback(
@@ -112,8 +94,6 @@ unsafe extern "system" fn debug_callback(
     );
     vk::FALSE
 }
-
-
 
 pub unsafe fn vulkan_routine_8700
 ()
@@ -543,7 +523,6 @@ pub unsafe fn vulkan_routine_8700
 
     }
 
-
     let attachments = vec![
         vk::AttachmentDescriptionBuilder::new()
             .format(format.format)
@@ -591,7 +570,12 @@ pub unsafe fn vulkan_routine_8700
         .attachments(&attachments)
         .subpasses(&subpasses)
         .dependencies(&dependencies);
-    let render_pass = device.lock().unwrap().create_render_pass(&render_pass_info, None).unwrap();
+
+    let rp_pre = device.lock().unwrap().create_render_pass(&render_pass_info, None).unwrap();
+    let render_pass = Arc::new(Mutex::new(rp_pre));
+    // let render_pass = Arc::new(Mutex::new(device.lock().unwrap().create_render_pass(&render_pass_info, None).unwrap()));
+
+
 
     let (
         pipeline,
@@ -602,7 +586,7 @@ pub unsafe fn vulkan_routine_8700
     ) = pipeline_101
     (
         device.clone(),
-        &render_pass.clone(),
+        render_pass.clone(),
         &format,
         &swapchain_image_extent,
     ).unwrap();
@@ -613,7 +597,7 @@ pub unsafe fn vulkan_routine_8700
         .map(|image_view| {
             let attachments = vec![*image_view, depth_image_view];
             let framebuffer_info = vk::FramebufferCreateInfoBuilder::new()
-                .render_pass(render_pass)
+                .render_pass(*render_pass.lock().unwrap())
                 .attachments(&attachments)
                 .width(swapchain_image_extent.width)
                 .height(swapchain_image_extent.height)
@@ -675,6 +659,19 @@ pub unsafe fn vulkan_routine_8700
 
 
 
+
+
+    let rec_cb_closure = closure!(
+        clone device,
+        clone record_cb_219,
+        ||
+    {
+        // println!("{:?} {:?}", record_cb_218, device);
+
+
+
+
+    });
 
 
 
@@ -765,10 +762,10 @@ pub unsafe fn vulkan_routine_8700
             let cb_2 = cb_2s[image_index as usize];
             let framebuffer = swapchain_framebuffers[image_index as usize];
 
-            let cb_34 = record_cb_218
+            let cb_34 = record_cb_219
             (
                 device.clone(),
-                render_pass,
+                render_pass.clone(),
                 command_pool,
                 pipeline, // primary_pipeline,
                 pipeline_layout,
@@ -829,7 +826,7 @@ pub unsafe fn vulkan_routine_8700
                 device.lock().unwrap().destroy_framebuffer(framebuffer, None);
             }
             device.lock().unwrap().destroy_pipeline(pipeline, None);
-            device.lock().unwrap().destroy_render_pass(render_pass, None);
+            device.lock().unwrap().destroy_render_pass(*render_pass.lock().unwrap(), None);
             device.lock().unwrap().destroy_pipeline_layout(pipeline_layout, None);
             device.lock().unwrap().destroy_shader_module(shader_vert, None);
             device.lock().unwrap().destroy_shader_module(shader_frag, None);
