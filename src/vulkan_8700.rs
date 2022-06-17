@@ -338,14 +338,19 @@ pub unsafe fn vulkan_routine_8700
             .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
     let command_pool = device.lock().unwrap().create_command_pool(&command_pool_info, None).unwrap();
     // original, still using
-    let mut command_pools: Vec<vk::CommandPool> = vec![]; // this follows usage in the tutorial  https://github.com/KyleMayes/vulkanalia/blob/master/tutorial/src/32_secondary_command_buffers.rs
+
+
+
+    let command_pools : Arc<Mutex<Vec<Arc<Mutex<vk::CommandPool>>>>> = Arc::new(Mutex::new(vec![]));
+
     
     for _ in 0..swapchain_images.len() {
         let info = vk::CommandPoolCreateInfoBuilder::new()
             .flags(vk::CommandPoolCreateFlags::TRANSIENT)
             .queue_family_index(queue_family);
-        let command_pool = device.lock().unwrap().create_command_pool(&info, None).unwrap();
-        command_pools.push(command_pool);
+        let command_pool = Arc::new(Mutex::new(device.lock().unwrap().create_command_pool(&info, None).unwrap()));
+        command_pools.lock().unwrap().push(command_pool);
+        // command_pools.push(command_pool);
     }
     
     let (mut vertices_terr, mut indices_terr) = load_model().unwrap();
@@ -625,16 +630,21 @@ pub unsafe fn vulkan_routine_8700
     let mut primary_command_buffers: Vec<vk::CommandBuffer> = vec![];
     let mut secondary_command_buffers: Vec<vk::CommandBuffer> = vec![];
     for img_idx in 0..swapchain_framebuffers.len() {
+        let command_pool_arc = &command_pools.lock().unwrap()[img_idx];
+        let command_pool = command_pool_arc.lock().unwrap();
+
+        
         let primary_cb_alloc_info = vk::CommandBufferAllocateInfoBuilder::new()
-            .command_pool(command_pools[img_idx])
+
+            .command_pool(*command_pool)
             .level(vk::CommandBufferLevel::PRIMARY)
             .command_buffer_count(1);
         primary_command_buffers.push(device.lock().unwrap().allocate_command_buffers(&primary_cb_alloc_info).unwrap()[0]);
-        let secondary_cb_alloc_info = vk::CommandBufferAllocateInfoBuilder::new()
-            .command_pool(command_pools[img_idx])
-            .level(vk::CommandBufferLevel::SECONDARY)
-            .command_buffer_count(1);
-        secondary_command_buffers.push(device.lock().unwrap().allocate_command_buffers(&secondary_cb_alloc_info).unwrap()[0]);
+    //     let secondary_cb_alloc_info = vk::CommandBufferAllocateInfoBuilder::new()
+    //         .command_pool(command_pool)
+    //         .level(vk::CommandBufferLevel::SECONDARY)
+    //         .command_buffer_count(1);
+    //     secondary_command_buffers.push(device.lock().unwrap().allocate_command_buffers(&secondary_cb_alloc_info).unwrap()[0]);
     }
 
     let now = Instant::now();
@@ -658,6 +668,9 @@ pub unsafe fn vulkan_routine_8700
 
     let rcb_closure = closure!(
         clone rcb_tx,
+        clone device,
+        clone render_pass,
+        
 
         ||
         {
@@ -809,7 +822,11 @@ pub unsafe fn vulkan_routine_8700
             }
             images_in_flight[image_index as usize] = in_flight_fences[frame];
             let wait_semaphores = vec![image_available_semaphores[frame]];
-            let command_pool = command_pools[image_index as usize];
+            
+            let command_pool_arc = &command_pools.lock().unwrap()[image_index as usize];
+
+
+
 
             let command_buffer = cmd_bufs[image_index as usize];
             let cb_2 = cb_2s[image_index as usize];
@@ -824,7 +841,7 @@ pub unsafe fn vulkan_routine_8700
             (
                 device.clone(),
                 render_pass.clone(),
-                command_pool,
+                command_pool_arc,
                 pipeline, // primary_pipeline,
                 pipeline_layout,
                 &mut primary_command_buffers,

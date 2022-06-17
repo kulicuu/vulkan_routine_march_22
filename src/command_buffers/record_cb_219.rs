@@ -57,7 +57,7 @@ pub unsafe fn record_cb_219
 (
     device: Arc<Mutex<DeviceLoader>>,
     render_pass: Arc<Mutex<vk::RenderPass>>,
-    command_pool: vk::CommandPool,
+    command_pool: &Arc<Mutex<vk::CommandPool>>,
     primary_pipeline: vk::Pipeline,
     primary_pipeline_layout: vk::PipelineLayout,
     primary_command_buffers: &mut Vec<vk::CommandBuffer>,
@@ -74,11 +74,14 @@ pub unsafe fn record_cb_219
 )
 -> Result<(vk::CommandBuffer), &'a str>
 {
-    device.lock().unwrap().reset_command_pool(command_pool, vk::CommandPoolResetFlags::empty()).unwrap();
+    
+    
+
+    device.lock().unwrap().reset_command_pool(*command_pool.lock().unwrap(), vk::CommandPoolResetFlags::empty()).unwrap();
 
     // Primary command buffer:
     let allocate_info = vk::CommandBufferAllocateInfoBuilder::new()
-        .command_pool(command_pool)
+        .command_pool(*command_pool.lock().unwrap())
         .level(vk::CommandBufferLevel::PRIMARY)
         .command_buffer_count(1);
 
