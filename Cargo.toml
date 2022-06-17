@@ -11,7 +11,8 @@ edition = "2021"
 [dependencies]
 
 anyhow = "1"
-nalgebra-glm = "0.12"
+# nalgebra = "0.31.0"
+nalgebra-glm = "0.17"
 winit     = "0.26.1"
 num-complex = "0.4.0"
 erupt = { path = "../erupt/erupt" }

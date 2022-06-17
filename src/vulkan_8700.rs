@@ -29,12 +29,13 @@ use std::{
     fs::{write, OpenOptions},
     io::prelude::*,
     mem::*,
+    // sync::mpsc::channel,
     os::raw::c_char,
     ptr,
     result::Result,
     result::Result::*,
     string::String,
-    sync::{Arc, Mutex, mpsc},
+    sync::{Arc, Mutex, mpsc, mpsc::{channel}},
     thread,
     time,
 };
@@ -94,6 +95,9 @@ unsafe extern "system" fn debug_callback(
     );
     vk::FALSE
 }
+
+
+
 
 pub unsafe fn vulkan_routine_8700
 ()
@@ -251,8 +255,6 @@ pub unsafe fn vulkan_routine_8700
     })
     .expect("No suitable physical device found");
 
-
-
     println!("\n\n\nUsing physical device: {:?}\n\n\n", CStr::from_ptr(device_properties.device_name.as_ptr()));
 
     let queue_info = vec![vk::DeviceQueueCreateInfoBuilder::new()
@@ -271,8 +273,6 @@ pub unsafe fn vulkan_routine_8700
     // device.lock().unwrap();
     // let device = device__pre.lock().unwrap();
     
-
-
     let queue = device.lock().unwrap().get_device_queue(queue_family, 0);
 
     let surface_caps = instance.get_physical_device_surface_capabilities_khr(physical_device, surface).unwrap();
@@ -380,7 +380,6 @@ pub unsafe fn vulkan_routine_8700
         &mut indices_terr,
     ).unwrap();
 
-
     let vb = buffer_vertices
     (
         device.clone(),
@@ -388,8 +387,6 @@ pub unsafe fn vulkan_routine_8700
         command_pool,
         &mut vertices_terr, 
     ).unwrap();
-
-
 
     let info = vk::DescriptorSetLayoutBindingFlagsCreateInfoBuilder::new()
         .binding_flags(&[vk::DescriptorBindingFlags::empty()]);
@@ -463,6 +460,15 @@ pub unsafe fn vulkan_routine_8700
         }
     };
 
+    let camera_2 = Arc::new(Mutex::new(Camera {
+        position: camera_location,
+        attitude: Attitude {
+            roll_axis_normal,
+            pitch_axis_normal,
+            yaw_axis_normal, 
+        }
+    }));
+
 
     let mut view: glm::Mat4 = glm::look_at::<f32>
     (
@@ -470,9 +476,17 @@ pub unsafe fn vulkan_routine_8700
         &image_target,
         &yaw_axis_normal,
     );
-    let mut push_constant = PushConstants {
-        view: view,
-    };
+
+
+    let pc_view: Arc<Mutex<glm::Mat4>> = Arc::new(Mutex::new(glm::look_at::<f32>
+    (
+        &camera_location,
+        &image_target,
+        &yaw_axis_normal,
+    )));
+
+
+
     let pool_size = vk::DescriptorPoolSizeBuilder::new()
         ._type(vk::DescriptorType::UNIFORM_BUFFER)
         .descriptor_count(swapchain_image_count as u32);
@@ -490,7 +504,6 @@ pub unsafe fn vulkan_routine_8700
     let d_sets = device.lock().unwrap().allocate_descriptor_sets(&d_set_alloc_info).expect("failed in alloc DescriptorSet");
     let ubo_size = ::std::mem::size_of::<UniformBufferObject>() as u64;
 
-
     for i in 0..swapchain_image_count {
         let d_buf_info = vk::DescriptorBufferInfoBuilder::new()
             .buffer(uniform_buffers[i])
@@ -498,7 +511,6 @@ pub unsafe fn vulkan_routine_8700
             .range(ubo_size);
 
         let d_buf_infos = [d_buf_info];
-
         let d_write_builder = vk::WriteDescriptorSetBuilder::new()
             .dst_set(d_sets[0])
             .dst_binding(0)
@@ -518,7 +530,6 @@ pub unsafe fn vulkan_routine_8700
             i as usize, 
             2.3
         );
-
     }
 
     let attachments = vec![
@@ -549,12 +560,10 @@ pub unsafe fn vulkan_routine_8700
         .attachment(0)
         .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)];
 
-
     let subpasses = vec![vk::SubpassDescriptionBuilder::new()
         .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
         .color_attachments(&color_attachment_refs)
         .depth_stencil_attachment(&depth_attach_ref)];
-
 
     let dependencies = vec![vk::SubpassDependencyBuilder::new()
         .src_subpass(vk::SUBPASS_EXTERNAL)
@@ -570,10 +579,9 @@ pub unsafe fn vulkan_routine_8700
         .dependencies(&dependencies);
 
     let rp_pre = device.lock().unwrap().create_render_pass(&render_pass_info, None).unwrap();
-    let render_pass = Arc::new(Mutex::new(rp_pre));
-    // let render_pass = Arc::new(Mutex::new(device.lock().unwrap().create_render_pass(&render_pass_info, None).unwrap()));
-
-
+    let render_pass = Arc::new(Mutex::new(
+        device.lock().unwrap().create_render_pass(&render_pass_info, None).unwrap()
+    ));
 
     let (
         pipeline,
@@ -588,7 +596,6 @@ pub unsafe fn vulkan_routine_8700
         &format,
         &swapchain_image_extent,
     ).unwrap();
-
 
     let swapchain_framebuffers: Vec<_> = swapchain_image_views
         .iter()
@@ -609,8 +616,6 @@ pub unsafe fn vulkan_routine_8700
         .level(vk::CommandBufferLevel::PRIMARY)
         .command_buffer_count(swapchain_framebuffers.len() as _);
     let cmd_bufs = device.lock().unwrap().allocate_command_buffers(&cmd_buf_allocate_info).unwrap();
-
-
 
     let cb_2_info = vk::CommandBufferAllocateInfoBuilder::new()
         .command_pool(command_pool)
@@ -646,29 +651,102 @@ pub unsafe fn vulkan_routine_8700
         .collect();
     let mut images_in_flight: Vec<_> = swapchain_images.iter().map(|_| vk::Fence::null()).collect();
     let mut frame = 0;
-    let mut button_push: [bool; 2] = [false; 2];
-    let mut control_input = ControlInput {
-        roll: 0,
-        pitch: 0,
-        yaw: 0,
-        skew: 0,
-    };
 
 
 
-    // let command_pool_cursor = Arc::new(Mutex::new())
+    let (rcb_tx, rcb_rx) : (mpsc::Sender<u8>, mpsc::Receiver<u8>) = channel();
 
-    let rec_cb_closure = closure!(
-        clone device,
-        
-        
-        
-        clone record_cb_219,
+    let rcb_closure = closure!(
+        clone rcb_tx,
+
         ||
-    {
-        // println!("{:?} {:?}", record_cb_218, device);
+        {
 
-    });
+
+            // The main thread will also use this transmitter.  This rcb record command buffer thread will signal when it is done recording command buffer.
+            // Actually it doesn't even need to do that.  
+
+
+        }
+    );
+
+
+    thread::spawn(rcb_closure);
+
+
+
+    let (tx, rx) : (mpsc::Sender<u8>, mpsc::Receiver<u8>) = channel();
+
+
+    let state_thread_closure = closure!(
+        move rx,
+        clone pc_view,
+        move camera_2,
+        ||
+        {
+
+
+            
+            println!("Hello state management thread.");
+            let scalar_45 = 0.345;
+            let mut counter = 0;
+            while true {
+                let mut attitude = camera_2.lock().unwrap().attitude;
+                println!("check attitude: {:?}", attitude);
+                let mut position = camera_2.lock().unwrap().position;
+                // attitude.roll_axis_normal = glm::rotate_vec3(&attitude.roll_axis_normal, scalar_45, &attitude.roll_axis_normal);                
+                // .lock().unwrap().attitude = attitude;
+                // match rx.recv().unwrap() {
+                //     0 => *attitude.roll_axis_normal = *glm::rotate_vec3(&attitude.roll_axis_normal, scalar_45, &attitude.roll_axis_normal),
+                //     1 => *attitude.roll_axis_normal = *glm::rotate_vec3(&attitude.roll_axis_normal, -scalar_45, &attitude.roll_axis_normal),
+                //     2 => *attitude.pitch_axis_normal = *glm::rotate_vec3(&attitude.pitch_axis_normal, scalar_45, &attitude.pitch_axis_normal),
+                //     3 => *attitude.pitch_axis_normal = *glm::rotate_vec3(&attitude.pitch_axis_normal, -scalar_45, &attitude.pitch_axis_normal),
+                //     4 => *attitude.yaw_axis_normal = *glm::rotate_vec3(&attitude.yaw_axis_normal, scalar_45, &attitude.yaw_axis_normal),
+                //     5 => *attitude.yaw_axis_normal = *glm::rotate_vec3(&attitude.yaw_axis_normal, scalar_45, &attitude.yaw_axis_normal),
+                //     _ => println!(" nothing "),
+                // }
+
+                let ans = rx.recv().unwrap();
+
+               
+
+
+                
+                let mut data_ref = pc_view.lock().unwrap();
+
+                println!("data_ref {:?}", data_ref);
+
+                let cursor = glm::look_at::<f32>
+                (
+                    &position,
+                    &(&position + &attitude.roll_axis_normal),
+                    &attitude.yaw_axis_normal,
+                );
+
+                *data_ref = cursor;
+                
+                let modded = glm::rotate_y(&cursor, 0.053 * (counter as f32));
+                *data_ref = modded; 
+
+                counter += 1;
+
+            }
+        }
+    );
+
+    thread::spawn(state_thread_closure);
+
+    
+
+
+
+    // let rec_cb_closure = closure!(
+    //     clone device,
+    //     clone record_cb_219,
+    //     ||
+    // {
+    //     // println!("{:?} {:?}", record_cb_218, device);
+    // });
 
 
     #[allow(clippy::collapsible_match, clippy::single_match)]
@@ -689,31 +767,29 @@ pub unsafe fn vulkan_routine_8700
                 (VirtualKeyCode::Escape, ElementState::Released) => {
                     *control_flow = ControlFlow::Exit
                 },
-                (winit::event::VirtualKeyCode::Space, ElementState::Released) => {
-                    button_push[frame] = true;
+                (winit::event::VirtualKeyCode::Space, ElementState::Released) => {  
                 },
                 (winit::event::VirtualKeyCode::Right, ElementState::Pressed) => {
-                    control_input.roll += 1;
+                    tx.send(0).unwrap();
                 },
                 (winit::event::VirtualKeyCode::Left, ElementState::Pressed) => {
-                    control_input.roll -= 1;
+                    tx.send(1).unwrap();
                 },
                 (winit::event::VirtualKeyCode::Up, ElementState::Pressed) => {
-                    control_input.pitch -= 1;
+                    tx.send(2).unwrap();
                 },
                 (winit::event::VirtualKeyCode::Down, ElementState::Pressed) => {
-                    control_input.pitch += 1;
+                    tx.send(3).unwrap();
                 },
                 (winit::event::VirtualKeyCode::Semicolon, ElementState::Pressed) => {
-                    control_input.yaw -= 1;
+                    tx.send(4).unwrap();
                 },
                 (winit::event::VirtualKeyCode::Q, ElementState::Pressed) => {
-                    control_input.yaw += 1;
+                    tx.send(5).unwrap();
                 },
                 _ => (),
 
             },
-
             _ => (),
         },
         Event::MainEventsCleared => {
@@ -725,27 +801,8 @@ pub unsafe fn vulkan_routine_8700
                 image_available_semaphores[frame],
                 vk::Fence::null(),
             ).unwrap();
-
-
             let delta_time = now.elapsed().as_secs_f32();
 
-
-
-            transform_camera(&mut camera, &mut push_constant.view, &mut control_input);
-
-            // push_constant = update_push_constants(push_constant, delta_time).unwrap();
-            // if button_push[frame] {
-            //     push_constant = update_push_constants(push_constant, delta_time).unwrap();
-            //     // update_uniform_buffer(&device, &mut uniform_transform, &mut uniform_buffers_memories, &mut uniform_buffers, image_index as usize, 3.2);
-            // }
-            // push_constant.view = 
-            // update_uniform_buffer(&device, &mut uniform_transform, &mut uniform_buffers_memories, &mut uniform_buffers, image_index as usize, 3.2);
-            // push_constant = update_push_constants(push_constant, delta_time).unwrap();
-            // mutate_view_matrix(&mut push_constant.view, &mut control_input);
-
-
-            button_push[frame] = false;
- 
             let image_in_flight = images_in_flight[image_index as usize];
             if !image_in_flight.is_null() {
                 device.lock().unwrap().wait_for_fences(&[image_in_flight], true, u64::MAX).unwrap();
@@ -758,6 +815,11 @@ pub unsafe fn vulkan_routine_8700
             let cb_2 = cb_2s[image_index as usize];
             let framebuffer = swapchain_framebuffers[image_index as usize];
 
+
+            // In the multi-threaded version, we should have be waiting on the previous cb_recording.
+
+            // rx_34.revd
+
             let cb_34 = record_cb_219
             (
                 device.clone(),
@@ -765,22 +827,16 @@ pub unsafe fn vulkan_routine_8700
                 command_pool,
                 pipeline, // primary_pipeline,
                 pipeline_layout,
-                // pipeline_grid, // secondary pipeline for the grid draw.
-                // pipeline_layout_grid,
                 &mut primary_command_buffers,
                 &mut secondary_command_buffers,
-                // &primary_command_buffers[image_index as usize],
-                // &secondary_command_buffers[image_index as usize],
                 &framebuffer,
                 image_index,
                 swapchain_image_extent,
                 &indices_terr,
                 d_sets.clone(),
                 vb,
-                // vb_grid,
                 ib,
-                push_constant,
-                // vertices_grid.len() as u32,
+                *pc_view.lock().unwrap(),
             ).unwrap();
 
             let cbs_35 = [cb_34];
@@ -804,7 +860,6 @@ pub unsafe fn vulkan_routine_8700
                 .image_indices(&image_indices);
             device.lock().unwrap().queue_present_khr(queue, &present_info).unwrap();
             frame = (frame + 1) % FRAMES_IN_FLIGHT;
-
         }
         Event::LoopDestroyed => unsafe {
             device.lock().unwrap().device_wait_idle().unwrap();

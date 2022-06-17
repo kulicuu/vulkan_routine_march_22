@@ -60,29 +60,20 @@ pub unsafe fn record_cb_219
     command_pool: vk::CommandPool,
     primary_pipeline: vk::Pipeline,
     primary_pipeline_layout: vk::PipelineLayout,
-    // grid_pipeline: vk::Pipeline, // secondary pipeline
-    // grid_pipeline_layout: vk::PipelineLayout,
     primary_command_buffers: &mut Vec<vk::CommandBuffer>,
     secondary_command_buffers: &mut Vec<vk::CommandBuffer>,
-    // primary_command_buffer: &vk::CommandBuffer,
-    // secondary_command_buffer: &vk::CommandBuffer,
     framebuffer: &vk::Framebuffer,
     image_index: u32,
     swapchain_image_extent: vk::Extent2D,
     indices_terr: &Vec<u32>,
     d_sets: erupt::SmallVec<vk::DescriptorSet>,
     vb: vk::Buffer,
-    // vb_grid: vk::Buffer,
     ib: vk::Buffer,
-    push_constant: PushConstants,
-    // primary_cb_vertex_count: u32,
-    // grid_cb_vertex_count: u32,
+    pc_view: glm::Mat4,
 
 )
 -> Result<(vk::CommandBuffer), &'a str>
 {
-
-
     device.lock().unwrap().reset_command_pool(command_pool, vk::CommandPoolResetFlags::empty()).unwrap();
 
     // Primary command buffer:
@@ -128,7 +119,11 @@ pub unsafe fn record_cb_219
     device.lock().unwrap().cmd_bind_index_buffer(primary_cb, ib, 0, vk::IndexType::UINT32);
     device.lock().unwrap().cmd_bind_vertex_buffers(primary_cb, 0, &[vb], &[0]);
     device.lock().unwrap().cmd_bind_descriptor_sets(primary_cb, vk::PipelineBindPoint::GRAPHICS, primary_pipeline_layout, 0, &d_sets, &[]);
-    let ptr = std::ptr::addr_of!(push_constant.view) as *const c_void;
+    // let ptr = std::ptr::addr_of!(push_constant.view) as *const c_void;
+    let ptr = std::ptr::addr_of!(pc_view) as *const c_void;
+    println!("pc_view {:?}", pc_view);
+    // let ptr_2 = std::ptr::addr_of!(*pc_view.lock().unwrap()) as *const c_void;
+    // let ptr_2 = std::ptr::addr_of!(pc_view) as *const c_void;
     device.lock().unwrap().cmd_push_constants
     (
         primary_cb,
@@ -136,11 +131,10 @@ pub unsafe fn record_cb_219
         vk::ShaderStageFlags::VERTEX,
         0,
         std::mem::size_of::<PushConstants>() as u32,
+        // ptr_2,
         ptr,
     );
     device.lock().unwrap().cmd_draw_indexed(primary_cb, (indices_terr.len()) as u32, ((indices_terr.len()) / 3) as u32, 0, 0, 0);
-
-
 
     // device.lock().unwrap().cmd_execute_commands(primary_cb, &[grid_cb]);
     device.lock().unwrap().cmd_end_render_pass(primary_cb);
