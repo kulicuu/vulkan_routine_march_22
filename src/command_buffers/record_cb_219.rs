@@ -57,7 +57,7 @@ pub unsafe fn record_cb_219
 (
     device: Arc<Mutex<DeviceLoader>>,
     render_pass: Arc<Mutex<vk::RenderPass>>,
-    command_pool: &Arc<Mutex<vk::CommandPool>>,
+    command_pool: Arc<Mutex<vk::CommandPool>>,
     primary_pipeline: vk::Pipeline,
     primary_pipeline_layout: vk::PipelineLayout,
     primary_command_buffers: &mut Vec<vk::CommandBuffer>,

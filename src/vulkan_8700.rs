@@ -823,8 +823,9 @@ pub unsafe fn vulkan_routine_8700
             images_in_flight[image_index as usize] = in_flight_fences[frame];
             let wait_semaphores = vec![image_available_semaphores[frame]];
             
-            let command_pool_arc = &command_pools.lock().unwrap()[image_index as usize];
+            // let command_pool_arc = &command_pools.lock().unwrap()[image_index as usize];
 
+            // let command_pool_arc = &command_pools.lock().unwrap()[image_index as usize];
 
 
 
@@ -833,15 +834,13 @@ pub unsafe fn vulkan_routine_8700
             let framebuffer = swapchain_framebuffers[image_index as usize];
 
 
-            // In the multi-threaded version, we should have be waiting on the previous cb_recording.
 
-            // rx_34.revd
 
             let cb_34 = record_cb_219
             (
                 device.clone(),
                 render_pass.clone(),
-                command_pool_arc,
+                command_pools.lock().unwrap()[image_index as usize].clone(),
                 pipeline, // primary_pipeline,
                 pipeline_layout,
                 &mut primary_command_buffers,
