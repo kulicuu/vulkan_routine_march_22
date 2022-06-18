@@ -337,11 +337,14 @@ pub unsafe fn vulkan_routine_8700
             .queue_family_index(queue_family)
             .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
     let command_pool = device.lock().unwrap().create_command_pool(&command_pool_info, None).unwrap();
-    // original, still using
+    // original, still using.  This one is for some setup tasks.
+    // println!("Original queue_family {}", queue_family);
+    let queue_family_2 = queue_family;
 
 
 
-    let command_pools : Arc<Mutex<Vec<Arc<Mutex<vk::CommandPool>>>>> = Arc::new(Mutex::new(vec![]));
+    let command_pools : Arc<Mutex<Vec<Arc<Mutex<vk::CommandPool>>>>> = Arc::new(Mutex::new(vec![]));  // Need to get rid of the Arc Mutex around this.  
+    // We'll rather have a command-pool per
 
     
     for _ in 0..swapchain_images.len() {
@@ -350,7 +353,6 @@ pub unsafe fn vulkan_routine_8700
             .queue_family_index(queue_family);
         let command_pool = Arc::new(Mutex::new(device.lock().unwrap().create_command_pool(&info, None).unwrap()));
         command_pools.lock().unwrap().push(command_pool);
-        // command_pools.push(command_pool);
     }
     
     let (mut vertices_terr, mut indices_terr) = load_model().unwrap();
@@ -474,7 +476,6 @@ pub unsafe fn vulkan_routine_8700
         }
     }));
 
-
     let mut view: glm::Mat4 = glm::look_at::<f32>
     (
         &camera_location,
@@ -482,15 +483,12 @@ pub unsafe fn vulkan_routine_8700
         &yaw_axis_normal,
     );
 
-
     let pc_view: Arc<Mutex<glm::Mat4>> = Arc::new(Mutex::new(glm::look_at::<f32>
     (
         &camera_location,
         &image_target,
         &yaw_axis_normal,
     )));
-
-
 
     let pool_size = vk::DescriptorPoolSizeBuilder::new()
         ._type(vk::DescriptorType::UNIFORM_BUFFER)
@@ -591,6 +589,8 @@ pub unsafe fn vulkan_routine_8700
     let (
         pipeline,
         pipeline_layout,
+        pipeline_2,
+        pipeline_layout_2,
         depth_image_view,
         shader_vert,
         shader_frag,
@@ -670,26 +670,27 @@ pub unsafe fn vulkan_routine_8700
         clone rcb_tx,
         clone device,
         clone render_pass,
-        
-
+        move queue_family_2,
+        move pipeline_2,
+        move pipeline_layout_2,
         ||
         {
 
+            let info = vk::CommandPoolCreateInfoBuilder::new()
+                .flags(vk::CommandPoolCreateFlags::TRANSIENT)
+                .queue_family_index(queue_family);
+            let command_pool = device.lock().unwrap().create_command_pool(&info, None).unwrap();
 
-            // The main thread will also use this transmitter.  This rcb record command buffer thread will signal when it is done recording command buffer.
-            // Actually it doesn't even need to do that.  
+
+
 
 
         }
     );
 
-
     thread::spawn(rcb_closure);
 
-
-
     let (tx, rx) : (mpsc::Sender<u8>, mpsc::Receiver<u8>) = channel();
-
 
     let state_thread_closure = closure!(
         move rx,
@@ -697,15 +698,11 @@ pub unsafe fn vulkan_routine_8700
         move camera_2,
         ||
         {
-
-
-            
             println!("Hello state management thread.");
             let scalar_45 = 0.345;
             let mut counter = 0;
             while true {
                 let mut attitude = camera_2.lock().unwrap().attitude;
-                println!("check attitude: {:?}", attitude);
                 let mut position = camera_2.lock().unwrap().position;
                 // attitude.roll_axis_normal = glm::rotate_vec3(&attitude.roll_axis_normal, scalar_45, &attitude.roll_axis_normal);                
                 // .lock().unwrap().attitude = attitude;
@@ -720,47 +717,22 @@ pub unsafe fn vulkan_routine_8700
                 // }
 
                 let ans = rx.recv().unwrap();
-
-               
-
-
-                
                 let mut data_ref = pc_view.lock().unwrap();
-
-                println!("data_ref {:?}", data_ref);
-
                 let cursor = glm::look_at::<f32>
                 (
                     &position,
                     &(&position + &attitude.roll_axis_normal),
                     &attitude.yaw_axis_normal,
                 );
-
                 *data_ref = cursor;
-                
                 let modded = glm::rotate_y(&cursor, 0.053 * (counter as f32));
                 *data_ref = modded; 
-
                 counter += 1;
-
             }
         }
     );
 
     thread::spawn(state_thread_closure);
-
-    
-
-
-
-    // let rec_cb_closure = closure!(
-    //     clone device,
-    //     clone record_cb_219,
-    //     ||
-    // {
-    //     // println!("{:?} {:?}", record_cb_218, device);
-    // });
-
 
     #[allow(clippy::collapsible_match, clippy::single_match)]
     event_loop.run(move |event, _, control_flow| match event {
@@ -814,7 +786,8 @@ pub unsafe fn vulkan_routine_8700
                 image_available_semaphores[frame],
                 vk::Fence::null(),
             ).unwrap();
-            let delta_time = now.elapsed().as_secs_f32();
+
+            let next_index = (image_index + 1) % 3;
 
             let image_in_flight = images_in_flight[image_index as usize];
             if !image_in_flight.is_null() {
@@ -822,25 +795,15 @@ pub unsafe fn vulkan_routine_8700
             }
             images_in_flight[image_index as usize] = in_flight_fences[frame];
             let wait_semaphores = vec![image_available_semaphores[frame]];
-            
-            // let command_pool_arc = &command_pools.lock().unwrap()[image_index as usize];
 
-            // let command_pool_arc = &command_pools.lock().unwrap()[image_index as usize];
-
-
-
-            let command_buffer = cmd_bufs[image_index as usize];
-            let cb_2 = cb_2s[image_index as usize];
             let framebuffer = swapchain_framebuffers[image_index as usize];
-
-
-
-
             let cb_34 = record_cb_219
             (
                 device.clone(),
                 render_pass.clone(),
                 command_pools.lock().unwrap()[image_index as usize].clone(),
+                // NOTE: We don't actually want to share the command pools across threads,
+                // acording to this article: https://vulkan-tutorial.com/Drawing_a_triangle/Drawing/Rendering_and_presentation
                 pipeline, // primary_pipeline,
                 pipeline_layout,
                 &mut primary_command_buffers,
@@ -877,6 +840,8 @@ pub unsafe fn vulkan_routine_8700
             device.lock().unwrap().queue_present_khr(queue, &present_info).unwrap();
             frame = (frame + 1) % FRAMES_IN_FLIGHT;
         }
+
+
         Event::LoopDestroyed => unsafe {
             device.lock().unwrap().device_wait_idle().unwrap();
             for &semaphore in image_available_semaphores

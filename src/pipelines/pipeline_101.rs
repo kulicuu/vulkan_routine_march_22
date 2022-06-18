@@ -55,6 +55,8 @@ pub unsafe fn pipeline_101
 -> Result<(
         vk::Pipeline,
         vk::PipelineLayout,
+        vk::Pipeline,
+        vk::PipelineLayout,
         vk::ImageView,
         vk::ShaderModule,
         vk::ShaderModule,
@@ -228,6 +230,8 @@ pub unsafe fn pipeline_101
     .push_constant_ranges(&slice);
 
     let pipeline_layout = device.lock().unwrap().create_pipeline_layout(&pipeline_layout_info, None).unwrap();
+    let pipeline_layout_2 = device.lock().unwrap().create_pipeline_layout(&pipeline_layout_info, None).unwrap();
+
 
     let pipeline_info = vk::GraphicsPipelineCreateInfoBuilder::new()
         .stages(&shader_stages)
@@ -242,10 +246,13 @@ pub unsafe fn pipeline_101
         .render_pass(*render_pass.lock().unwrap())
         .subpass(0);
     let pipeline = device.lock().unwrap().create_graphics_pipelines(vk::PipelineCache::null(), &[pipeline_info], None).unwrap()[0];
+    let pipeline_2 = device.lock().unwrap().create_graphics_pipelines(vk::PipelineCache::null(), &[pipeline_info], None).unwrap()[0];
 
     Ok((
         pipeline,
         pipeline_layout,
+        pipeline_2,
+        pipeline_layout_2,
         depth_image_view,
         shader_vert,
         shader_frag,

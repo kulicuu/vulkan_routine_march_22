@@ -17,10 +17,6 @@ mod command_buffers;
 mod threads;
 
 mod precursors;
-mod pipeline_101;
-mod pipeline_102;
-// mod startup_vulkan;
-
 
 use vulkan_8700::*;
 // use vulkan_8600::*;
@@ -29,9 +25,6 @@ use vulkan_8700::*;
 // use vulkan_8300::*;
 // use vulkan_6400::*;
 // use vulkan_6300::*;
-
-
-
 
 use erupt::{
     cstr,
@@ -78,7 +71,6 @@ use winit::{
 use structopt::StructOpt;
 const TITLE: &str = "vulkan-routine";
 
-
 fn main() {
     unsafe { vulkan_routine_8700() }; 
     // unsafe { vulkan_routine_8600() }; 
@@ -86,8 +78,6 @@ fn main() {
     // unsafe { vulkan_routine_8400() };
     // unsafe { vulkan_routine_8300() };
     // unsafe { vulkan_routine_6400() };
-    
     // unsafe { vulkan_routine_6300() };
-
-    
+   
 }
