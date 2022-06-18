@@ -1,5 +1,3 @@
-use super::record_cb_218::*;
-
 use erupt::{
     cstr,
     utils::{self, surface},
@@ -120,7 +118,8 @@ pub unsafe fn record_cb_219
         primary_pipeline_layout,
         vk::ShaderStageFlags::VERTEX,
         0,
-        std::mem::size_of::<PushConstants>() as u32,
+        // std::mem::size_of::<PushConstants>() as u32,
+        std::mem::size_of::<glm::Mat4>() as u32,
         ptr,
     );
     device.lock().unwrap().cmd_draw_indexed(primary_cb, (indices_terr.len()) as u32, ((indices_terr.len()) / 3) as u32, 0, 0, 0);

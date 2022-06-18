@@ -35,11 +35,11 @@ use std::{
     result::Result,
     result::Result::*,
     string::String,
-    sync::{Arc, Mutex, mpsc, mpsc::{channel}},
+    sync::{Arc, Mutex, MutexGuard, mpsc, mpsc::{channel}},
     thread,
     time,
 };
-// use std::sync::mpsc;
+
 use std::time::{Duration, Instant};
 use std::thread::sleep;
 use smallvec::SmallVec;
@@ -80,7 +80,6 @@ struct Opt {
     validation_layers: bool,
 }
 
-// static mut log_300: Vec<String> = vec!();
 unsafe extern "system" fn debug_callback(
     _message_severity: vk::DebugUtilsMessageSeverityFlagBitsEXT,
     _message_types: vk::DebugUtilsMessageTypeFlagsEXT,
@@ -88,15 +87,12 @@ unsafe extern "system" fn debug_callback(
     _p_user_data: *mut c_void,
 ) -> vk::Bool32 {
     let str_99 = String::from(CStr::from_ptr((*p_callback_data).p_message).to_string_lossy());
-    // log_300.push(str_99 );
     eprintln!(
         "{}",
         CStr::from_ptr((*p_callback_data).p_message).to_string_lossy()
     );
     vk::FALSE
 }
-
-
 
 
 pub unsafe fn vulkan_routine_8700
@@ -266,14 +262,15 @@ pub unsafe fn vulkan_routine_8700
         .enabled_features(&features)
         .enabled_extension_names(&device_extensions)
         .enabled_layer_names(&device_layers);
-    // let device__pre  = Arc::new(Mutex::new(DeviceLoader::new(&instance, physical_device, &device_info).unwrap()));
-    // let device = Arc::new(DeviceLoader::new(&instance, physical_device, &device_info).unwrap());
     let device  = Arc::new(Mutex::new(DeviceLoader::new(&instance, physical_device, &device_info).unwrap()));
 
-    // device.lock().unwrap();
-    // let device = device__pre.lock().unwrap();
+
+    let mut device_locked = device.lock().unwrap();
+    let queue = device_locked.get_device_queue(queue_family, 0);
+
     
-    let queue = device.lock().unwrap().get_device_queue(queue_family, 0);
+    
+    // let queue = device.lock().unwrap().get_device_queue(queue_family, 0);
 
     let surface_caps = instance.get_physical_device_surface_capabilities_khr(physical_device, surface).unwrap();
     let mut image_count = surface_caps.min_image_count + 1;
@@ -305,8 +302,9 @@ pub unsafe fn vulkan_routine_8700
         .present_mode(present_mode)
         .clipped(true)
         .old_swapchain(vk::SwapchainKHR::null());
-    let swapchain = device.lock().unwrap().create_swapchain_khr(&swapchain_info, None).unwrap();
-    let swapchain_images = device.lock().unwrap().get_swapchain_images_khr(swapchain, None).unwrap();
+    // let swapchain = device.lock().unwrap().create_swapchain_khr(&swapchain_info, None).unwrap();
+    let swapchain = device_locked.create_swapchain_khr(&swapchain_info, None).unwrap();
+    let swapchain_images = device_locked.get_swapchain_images_khr(swapchain, None).unwrap();
     let swapchain_image_views: Vec<_> = swapchain_images
         .iter()
         .map(|swapchain_image| {
@@ -329,29 +327,24 @@ pub unsafe fn vulkan_routine_8700
                         .layer_count(1)
                         .build(),
                 );
-            device.lock().unwrap().create_image_view(&image_view_info, None).unwrap()
+            device_locked.create_image_view(&image_view_info, None).unwrap()
         })
         .collect();
 
     let command_pool_info = vk::CommandPoolCreateInfoBuilder::new()
             .queue_family_index(queue_family)
             .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
-    let command_pool = device.lock().unwrap().create_command_pool(&command_pool_info, None).unwrap();
-    // original, still using.  This one is for some setup tasks.
-    // println!("Original queue_family {}", queue_family);
+    let command_pool = device_locked.create_command_pool(&command_pool_info, None).unwrap();
     let queue_family_2 = queue_family;
-
-
 
     let command_pools : Arc<Mutex<Vec<Arc<Mutex<vk::CommandPool>>>>> = Arc::new(Mutex::new(vec![]));  // Need to get rid of the Arc Mutex around this.  
     // We'll rather have a command-pool per
-
     
     for _ in 0..swapchain_images.len() {
         let info = vk::CommandPoolCreateInfoBuilder::new()
             .flags(vk::CommandPoolCreateFlags::TRANSIENT)
             .queue_family_index(queue_family);
-        let command_pool = Arc::new(Mutex::new(device.lock().unwrap().create_command_pool(&info, None).unwrap()));
+        let command_pool = Arc::new(Mutex::new(device_locked.create_command_pool(&info, None).unwrap()));
         command_pools.lock().unwrap().push(command_pool);
     }
     
@@ -377,7 +370,7 @@ pub unsafe fn vulkan_routine_8700
             }
         }
     }
-
+    drop(device_locked);
     let physical_device_memory_properties = instance.get_physical_device_memory_properties(physical_device);
     let ib = buffer_indices
     (
@@ -409,13 +402,18 @@ pub unsafe fn vulkan_routine_8700
     let info = vk::DescriptorSetLayoutCreateInfoBuilder::new()
         .flags(vk::DescriptorSetLayoutCreateFlags::empty()) 
         .bindings(bindings);
-    let descriptor_set_layout = device.lock().unwrap().create_descriptor_set_layout(&info, None).unwrap();
+    let device_locked = device.lock().unwrap();
+    let descriptor_set_layout = device_locked.create_descriptor_set_layout(&info, None).unwrap();
+
+    drop(device_locked);
 
     let ubo_size = ::std::mem::size_of::<UniformBufferObject>();
     let mut uniform_buffers: Vec<vk::Buffer> = vec![];
     let mut uniform_buffers_memories: Vec<vk::DeviceMemory> = vec![];
     let swapchain_image_count = swapchain_images.len();
 
+
+    // drop(device_locked);
     for _ in 0..swapchain_image_count {
         let (uniform_buffer, uniform_buffer_memory) = create_buffer(
             device.clone(),
@@ -428,9 +426,7 @@ pub unsafe fn vulkan_routine_8700
     }
     let scalar_22 = 1.5;
     let mut uniform_transform = UniformBufferObject {
-        model: 
-        // Matrix4::from_translation(Vector3::new(5.0, 5.0, 5.0))
-        Matrix4::from_angle_y(Deg(1.0))
+        model: Matrix4::from_angle_y(Deg(1.0))
             * Matrix4::from_nonuniform_scale(scalar_22, scalar_22, scalar_22),
         view: Matrix4::look_at_rh(
             Point3::new(0.40, 0.40, 0.40),
@@ -662,7 +658,7 @@ pub unsafe fn vulkan_routine_8700
     let mut images_in_flight: Vec<_> = swapchain_images.iter().map(|_| vk::Fence::null()).collect();
     let mut frame = 0;
 
-
+    // drop(device_locked);
 
     let (rcb_tx, rcb_rx) : (mpsc::Sender<u8>, mpsc::Receiver<u8>) = channel();
 
@@ -673,17 +669,45 @@ pub unsafe fn vulkan_routine_8700
         move queue_family_2,
         move pipeline_2,
         move pipeline_layout_2,
+        clone command_pools,
         ||
         {
 
-            let info = vk::CommandPoolCreateInfoBuilder::new()
-                .flags(vk::CommandPoolCreateFlags::TRANSIENT)
-                .queue_family_index(queue_family);
-            let command_pool = device.lock().unwrap().create_command_pool(&info, None).unwrap();
+            // let info = vk::CommandPoolCreateInfoBuilder::new()
+            //     .flags(vk::CommandPoolCreateFlags::TRANSIENT)
+            //     .queue_family_index(queue_family);
+            // let command_pool = device.lock().unwrap().create_command_pool(&info, None).unwrap();
 
 
 
 
+
+            unsafe fn rec_cb_220
+            <'a>
+            (
+                device: Arc<Mutex<DeviceLoader>>,
+                render_pass: Arc<Mutex<vk::RenderPass>>,
+                command_pool: Arc<Mutex<vk::CommandPool>>,
+                pipeline: vk::Pipeline,
+                pipeline_layout: vk::PipelineLayout,
+                // pri_cb: &
+            )
+            // -> Result<(vk::CommandBuffer), &'a str>
+            -> Result<(), &'a str>
+            {
+                let mut device_locked = device.lock().unwrap();
+                let mut command_pool_locked = command_pool.lock().unwrap();
+                device_locked.reset_command_pool(*command_pool_locked, vk::CommandPoolResetFlags::empty()).unwrap();
+
+                // device.lock().unwrap().reset_command_pool(*command_pool.lock().unwrap(), vk::CommandPoolResetFlags::empty()).unwrap();
+                let allocate_info = vk::CommandBufferAllocateInfoBuilder::new()
+                    .command_pool(*command_pool_locked)
+                    .level(vk::CommandBufferLevel::PRIMARY)
+                    .command_buffer_count(1);
+                // let primary_cb = 
+
+                Ok(())
+            }
 
         }
     );
@@ -724,7 +748,6 @@ pub unsafe fn vulkan_routine_8700
                     &(&position + &attitude.roll_axis_normal),
                     &attitude.yaw_axis_normal,
                 );
-                *data_ref = cursor;
                 let modded = glm::rotate_y(&cursor, 0.053 * (counter as f32));
                 *data_ref = modded; 
                 counter += 1;
@@ -773,7 +796,6 @@ pub unsafe fn vulkan_routine_8700
                     tx.send(5).unwrap();
                 },
                 _ => (),
-
             },
             _ => (),
         },
