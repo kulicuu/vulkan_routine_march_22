@@ -388,6 +388,24 @@ pub unsafe fn vulkan_routine_8700
         &mut vertices_terr, 
     ).unwrap();
 
+    let ib_2 = buffer_indices
+    (
+        device.clone(),
+        queue,
+        command_pool,
+        &mut indices_terr,
+    ).unwrap();
+
+    let vb_2 = buffer_vertices
+    (
+        device.clone(),
+        queue,
+        command_pool,
+        &mut vertices_terr, 
+    ).unwrap();
+
+
+
     let info = vk::DescriptorSetLayoutBindingFlagsCreateInfoBuilder::new()
         .binding_flags(&[vk::DescriptorBindingFlags::empty()]);
 
@@ -670,17 +688,10 @@ pub unsafe fn vulkan_routine_8700
         move pipeline_2,
         move pipeline_layout_2,
         clone command_pools,
+        move vb_2,
+        move ib_2,
         ||
         {
-
-            // let info = vk::CommandPoolCreateInfoBuilder::new()
-            //     .flags(vk::CommandPoolCreateFlags::TRANSIENT)
-            //     .queue_family_index(queue_family);
-            // let command_pool = device.lock().unwrap().create_command_pool(&info, None).unwrap();
-
-
-
-
 
             unsafe fn rec_cb_220
             <'a>
@@ -690,6 +701,8 @@ pub unsafe fn vulkan_routine_8700
                 command_pool: Arc<Mutex<vk::CommandPool>>,
                 pipeline: vk::Pipeline,
                 pipeline_layout: vk::PipelineLayout,
+                framebuffer: Arc<Mutex<vk::Framebuffer>>,
+
                 // pri_cb: &
             )
             // -> Result<(vk::CommandBuffer), &'a str>
@@ -698,14 +711,48 @@ pub unsafe fn vulkan_routine_8700
                 let mut device_locked = device.lock().unwrap();
                 let mut command_pool_locked = command_pool.lock().unwrap();
                 device_locked.reset_command_pool(*command_pool_locked, vk::CommandPoolResetFlags::empty()).unwrap();
-
-                // device.lock().unwrap().reset_command_pool(*command_pool.lock().unwrap(), vk::CommandPoolResetFlags::empty()).unwrap();
                 let allocate_info = vk::CommandBufferAllocateInfoBuilder::new()
                     .command_pool(*command_pool_locked)
                     .level(vk::CommandBufferLevel::PRIMARY)
                     .command_buffer_count(1);
-                // let primary_cb = 
+                let primary_cb = device_locked.allocate_command_buffers(&allocate_info).unwrap()[0];
 
+                let cb_begin_info = vk::CommandBufferBeginInfoBuilder::new();
+                device_locked.begin_command_buffer(primary_cb, &cb_begin_info).unwrap();
+                let clear_values = vec![
+                    vk::ClearValue {
+                        color: vk::ClearColorValue {
+                            float32: [0.0, 0.0, 0.0, 1.0],
+                        },
+                    },
+                    vk::ClearValue {
+                        depth_stencil: vk::ClearDepthStencilValue {
+                            depth: 1.0,
+                            stencil: 0,
+                        },
+                    },
+                ];
+                let render_pass_begin_info = vk::RenderPassBeginInfoBuilder::new()
+                    .render_pass(*render_pass.lock().unwrap())
+                    .framebuffer(*framebuffer)
+                    .render_area(vk::Rect2D {
+                        offset: vk::Offset2D { x: 0, y: 0 },
+                        extent: swapchain_image_extent,
+                    })
+                    .clear_values(&clear_values);
+                device_locked.cmd_begin_render_pass(
+                    primary_cb,
+                    &render_pass_begin_info,
+                    vk::SubpassContents::SECONDARY_COMMAND_BUFFERS
+                );
+                // device_locked.cmd_bind_pipeline(primary_cb, vk::PipelineBindPoint::GRAPHICS, pipeline_2);
+                // device_locked.cmd_bind_index_buffer(primary_cb, ib_2, 0, vk::IndexType::UINT32);
+                // device_locked.cmd_bind_vertex_buffers(primary_cb, 0, &[vb_2], &[0]);
+                // device_locked.cmd_bind_descriptor_sets(primary_cb, vk::PipelineBindPoint::GRAPHICS, pipeline_layout)
+
+
+                drop(device_locked);
+                drop(command_pool_locked);
                 Ok(())
             }
 
