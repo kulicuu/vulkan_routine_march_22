@@ -72,15 +72,17 @@ pub unsafe fn record_cb_219
 )
 -> Result<(vk::CommandBuffer), &'a str>
 {
-    device.lock().unwrap().reset_command_pool(*command_pool.lock().unwrap(), vk::CommandPoolResetFlags::empty()).unwrap();
+    let mut dvc = device.lock().unwrap();
+    let mut cpool = command_pool.lock().unwrap();
+    dvc.reset_command_pool(*cpool, vk::CommandPoolResetFlags::empty()).unwrap();
     let allocate_info = vk::CommandBufferAllocateInfoBuilder::new()
-        .command_pool(*command_pool.lock().unwrap())
+        .command_pool(*cpool)
         .level(vk::CommandBufferLevel::PRIMARY)
         .command_buffer_count(1);
-    let primary_cb = device.lock().unwrap().allocate_command_buffers(&allocate_info).unwrap()[0];
+    let primary_cb = dvc.allocate_command_buffers(&allocate_info).unwrap()[0];
     primary_command_buffers[image_index as usize] = primary_cb;
     let pri_cb_begin_info = vk::CommandBufferBeginInfoBuilder::new();
-    device.lock().unwrap().begin_command_buffer(primary_cb, &pri_cb_begin_info).unwrap();
+    dvc.begin_command_buffer(primary_cb, &pri_cb_begin_info).unwrap();
     let clear_values = vec![
         vk::ClearValue {
             color: vk::ClearColorValue {
@@ -102,17 +104,17 @@ pub unsafe fn record_cb_219
             extent: swapchain_image_extent,
         })
         .clear_values(&clear_values);
-    device.lock().unwrap().cmd_begin_render_pass(
+    dvc.cmd_begin_render_pass(
         primary_cb,
         &render_pass_begin_info,
         vk::SubpassContents::SECONDARY_COMMAND_BUFFERS
     );
-    device.lock().unwrap().cmd_bind_pipeline(primary_cb, vk::PipelineBindPoint::GRAPHICS, primary_pipeline);
-    device.lock().unwrap().cmd_bind_index_buffer(primary_cb, ib, 0, vk::IndexType::UINT32);
-    device.lock().unwrap().cmd_bind_vertex_buffers(primary_cb, 0, &[vb], &[0]);
-    device.lock().unwrap().cmd_bind_descriptor_sets(primary_cb, vk::PipelineBindPoint::GRAPHICS, primary_pipeline_layout, 0, &d_sets, &[]);
+    dvc.cmd_bind_pipeline(primary_cb, vk::PipelineBindPoint::GRAPHICS, primary_pipeline);
+    dvc.cmd_bind_index_buffer(primary_cb, ib, 0, vk::IndexType::UINT32);
+    dvc.cmd_bind_vertex_buffers(primary_cb, 0, &[vb], &[0]);
+    dvc.cmd_bind_descriptor_sets(primary_cb, vk::PipelineBindPoint::GRAPHICS, primary_pipeline_layout, 0, &d_sets, &[]);
     let ptr = std::ptr::addr_of!(pc_view) as *const c_void;
-    device.lock().unwrap().cmd_push_constants
+    dvc.cmd_push_constants
     (
         primary_cb,
         primary_pipeline_layout,
@@ -122,8 +124,10 @@ pub unsafe fn record_cb_219
         std::mem::size_of::<glm::Mat4>() as u32,
         ptr,
     );
-    device.lock().unwrap().cmd_draw_indexed(primary_cb, (indices_terr.len()) as u32, ((indices_terr.len()) / 3) as u32, 0, 0, 0);
-    device.lock().unwrap().cmd_end_render_pass(primary_cb);
-    device.lock().unwrap().end_command_buffer(primary_cb).unwrap();
+    dvc.cmd_draw_indexed(primary_cb, (indices_terr.len()) as u32, ((indices_terr.len()) / 3) as u32, 0, 0, 0);
+    dvc.cmd_end_render_pass(primary_cb);
+    dvc.end_command_buffer(primary_cb).unwrap();
+    drop(dvc);
+    drop(cpool);
     Ok((primary_cb))
 }

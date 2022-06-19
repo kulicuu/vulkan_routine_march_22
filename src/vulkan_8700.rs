@@ -8,7 +8,7 @@ use super::buffer_ops::buffer_vertices::*;
 use super::buffer_ops::create_buffer::*;
 use super::buffer_ops::update_uniform_buffer::*;
 use super::pipelines::pipeline_101::*;
-use super::command_buffers::record_cb_218::*;
+// use super::command_buffers::record_cb_218::*;
 use super::command_buffers::record_cb_219::*;
 // use super::spatial_transforms::camera::*;
 
@@ -264,13 +264,8 @@ pub unsafe fn vulkan_routine_8700
         .enabled_layer_names(&device_layers);
     let device  = Arc::new(Mutex::new(DeviceLoader::new(&instance, physical_device, &device_info).unwrap()));
 
-
     let mut device_locked = device.lock().unwrap();
     let queue = device_locked.get_device_queue(queue_family, 0);
-
-    
-    
-    // let queue = device.lock().unwrap().get_device_queue(queue_family, 0);
 
     let surface_caps = instance.get_physical_device_surface_capabilities_khr(physical_device, surface).unwrap();
     let mut image_count = surface_caps.min_image_count + 1;
@@ -404,8 +399,6 @@ pub unsafe fn vulkan_routine_8700
         &mut vertices_terr, 
     ).unwrap();
 
-
-
     let info = vk::DescriptorSetLayoutBindingFlagsCreateInfoBuilder::new()
         .binding_flags(&[vk::DescriptorBindingFlags::empty()]);
 
@@ -430,8 +423,6 @@ pub unsafe fn vulkan_routine_8700
     let mut uniform_buffers_memories: Vec<vk::DeviceMemory> = vec![];
     let swapchain_image_count = swapchain_images.len();
 
-
-    // drop(device_locked);
     for _ in 0..swapchain_image_count {
         let (uniform_buffer, uniform_buffer_memory) = create_buffer(
             device.clone(),
@@ -616,6 +607,25 @@ pub unsafe fn vulkan_routine_8700
         &swapchain_image_extent,
     ).unwrap();
 
+
+
+    let swapchain_framebuffers_pre: Vec<_> = swapchain_image_views
+        .iter()
+        .map(|image_view| {
+            let attachments = vec![*image_view, depth_image_view];
+            let framebuffer_info = vk::FramebufferCreateInfoBuilder::new()
+                .render_pass(*render_pass.lock().unwrap())
+                .attachments(&attachments)
+                .width(swapchain_image_extent.width)
+                .height(swapchain_image_extent.height)
+                .layers(1);
+            device.lock().unwrap().create_framebuffer(&framebuffer_info, None).unwrap()
+        })
+        .collect();
+
+    let swapchain_framebuffers_2 = Arc::new(Mutex::new(swapchain_framebuffers_pre));
+
+
     let swapchain_framebuffers: Vec<_> = swapchain_image_views
         .iter()
         .map(|image_view| {
@@ -676,7 +686,16 @@ pub unsafe fn vulkan_routine_8700
     let mut images_in_flight: Vec<_> = swapchain_images.iter().map(|_| vk::Fence::null()).collect();
     let mut frame = 0;
 
-    // drop(device_locked);
+    let rcb_clo = closure!(|| {
+        // "Each thread owns its own command-pool to allocate its own command buffer."
+        // I don't know exactly how 
+
+        
+
+
+
+
+    });
 
     let (rcb_tx, rcb_rx) : (mpsc::Sender<u8>, mpsc::Receiver<u8>) = channel();
 
@@ -690,71 +709,77 @@ pub unsafe fn vulkan_routine_8700
         clone command_pools,
         move vb_2,
         move ib_2,
+        clone swapchain_framebuffers_2,
         ||
         {
 
-            unsafe fn rec_cb_220
-            <'a>
-            (
-                device: Arc<Mutex<DeviceLoader>>,
-                render_pass: Arc<Mutex<vk::RenderPass>>,
-                command_pool: Arc<Mutex<vk::CommandPool>>,
-                pipeline: vk::Pipeline,
-                pipeline_layout: vk::PipelineLayout,
-                framebuffer: Arc<Mutex<vk::Framebuffer>>,
-
-                // pri_cb: &
-            )
-            // -> Result<(vk::CommandBuffer), &'a str>
-            -> Result<(), &'a str>
-            {
-                let mut device_locked = device.lock().unwrap();
-                let mut command_pool_locked = command_pool.lock().unwrap();
-                device_locked.reset_command_pool(*command_pool_locked, vk::CommandPoolResetFlags::empty()).unwrap();
-                let allocate_info = vk::CommandBufferAllocateInfoBuilder::new()
-                    .command_pool(*command_pool_locked)
-                    .level(vk::CommandBufferLevel::PRIMARY)
-                    .command_buffer_count(1);
-                let primary_cb = device_locked.allocate_command_buffers(&allocate_info).unwrap()[0];
-
-                let cb_begin_info = vk::CommandBufferBeginInfoBuilder::new();
-                device_locked.begin_command_buffer(primary_cb, &cb_begin_info).unwrap();
-                let clear_values = vec![
-                    vk::ClearValue {
-                        color: vk::ClearColorValue {
-                            float32: [0.0, 0.0, 0.0, 1.0],
-                        },
-                    },
-                    vk::ClearValue {
-                        depth_stencil: vk::ClearDepthStencilValue {
-                            depth: 1.0,
-                            stencil: 0,
-                        },
-                    },
-                ];
-                let render_pass_begin_info = vk::RenderPassBeginInfoBuilder::new()
-                    .render_pass(*render_pass.lock().unwrap())
-                    .framebuffer(*framebuffer)
-                    .render_area(vk::Rect2D {
-                        offset: vk::Offset2D { x: 0, y: 0 },
-                        extent: swapchain_image_extent,
-                    })
-                    .clear_values(&clear_values);
-                device_locked.cmd_begin_render_pass(
-                    primary_cb,
-                    &render_pass_begin_info,
-                    vk::SubpassContents::SECONDARY_COMMAND_BUFFERS
-                );
-                // device_locked.cmd_bind_pipeline(primary_cb, vk::PipelineBindPoint::GRAPHICS, pipeline_2);
-                // device_locked.cmd_bind_index_buffer(primary_cb, ib_2, 0, vk::IndexType::UINT32);
-                // device_locked.cmd_bind_vertex_buffers(primary_cb, 0, &[vb_2], &[0]);
-                // device_locked.cmd_bind_descriptor_sets(primary_cb, vk::PipelineBindPoint::GRAPHICS, pipeline_layout)
 
 
-                drop(device_locked);
-                drop(command_pool_locked);
-                Ok(())
-            }
+
+
+
+            // unsafe fn rec_cb_220
+            // <'a>
+            // (
+            //     device: Arc<Mutex<DeviceLoader>>,
+            //     render_pass: Arc<Mutex<vk::RenderPass>>,
+            //     command_pool: Arc<Mutex<vk::CommandPool>>,
+            //     pipeline: vk::Pipeline,
+            //     pipeline_layout: vk::PipelineLayout,
+            //     framebuffer: Arc<Mutex<vk::Framebuffer>>,
+            //     primary_cbs: Arc<Mutex<Vec<vk::CommandBuffer>>>,
+
+            //     pc_view: glm::Mat4,
+            // )
+
+            // -> Result<(), &'a str>
+            // {
+            //     let mut device_locked = device.lock().unwrap();
+            //     let mut command_pool_locked = command_pool.lock().unwrap();
+            //     device_locked.reset_command_pool(*command_pool_locked, vk::CommandPoolResetFlags::empty()).unwrap();
+            //     let allocate_info = vk::CommandBufferAllocateInfoBuilder::new()
+            //         .command_pool(*command_pool_locked)
+            //         .level(vk::CommandBufferLevel::PRIMARY)
+            //         .command_buffer_count(1);
+            //     let primary_cb = device_locked.allocate_command_buffers(&allocate_info).unwrap()[0];
+
+            //     let cb_begin_info = vk::CommandBufferBeginInfoBuilder::new();
+            //     device_locked.begin_command_buffer(primary_cb, &cb_begin_info).unwrap();
+            //     let clear_values = vec![
+            //         vk::ClearValue {
+            //             color: vk::ClearColorValue {
+            //                 float32: [0.0, 0.0, 0.0, 1.0],
+            //             },
+            //         },
+            //         vk::ClearValue {
+            //             depth_stencil: vk::ClearDepthStencilValue {
+            //                 depth: 1.0,
+            //                 stencil: 0,
+            //             },
+            //         },
+            //     ];
+            //     let render_pass_begin_info = vk::RenderPassBeginInfoBuilder::new()
+            //         .render_pass(*render_pass.lock().unwrap())
+            //         .framebuffer(*framebuffer)
+            //         .render_area(vk::Rect2D {
+            //             offset: vk::Offset2D { x: 0, y: 0 },
+            //             extent: swapchain_image_extent,
+            //         })
+            //         .clear_values(&clear_values);
+            //     device_locked.cmd_begin_render_pass(
+            //         primary_cb,
+            //         &render_pass_begin_info,
+            //         vk::SubpassContents::SECONDARY_COMMAND_BUFFERS
+            //     );
+            //     device_locked.cmd_bind_pipeline(primary_cb, vk::PipelineBindPoint::GRAPHICS, primary_pipeline);
+            //     device_locked.cmd_bind_index_buffer(primary_cb, ib, 0, vk::IndexType::UINT32);
+            //     device_locked.cmd_bind_vertex_buffers(primary_cb, 0, &[vb], &[0]);
+            //     device_locked.cmd_bind_descriptor_sets(primary_cb, vk::PipelineBindPoint::GRAPHICS, pipeline_layout, 0, &d_sets, &[]);
+
+            //     drop(device_locked);
+            //     drop(command_pool_locked);
+            //     Ok(())
+            // }
 
         }
     );
@@ -804,6 +829,8 @@ pub unsafe fn vulkan_routine_8700
 
     thread::spawn(state_thread_closure);
 
+
+
     #[allow(clippy::collapsible_match, clippy::single_match)]
     event_loop.run(move |event, _, control_flow| match event {
         Event::NewEvents(StartCause::Init) => {
@@ -847,8 +874,12 @@ pub unsafe fn vulkan_routine_8700
             _ => (),
         },
         Event::MainEventsCleared => {
-            device.lock().unwrap().wait_for_fences(&[in_flight_fences[frame]], true, u64::MAX).unwrap();
-            let image_index = device.lock().unwrap().acquire_next_image_khr
+
+            let mut dvc = device.lock().unwrap();
+
+            dvc.wait_for_fences(&[in_flight_fences[frame]], true, u64::MAX).unwrap();
+
+            let image_index = dvc.acquire_next_image_khr
             (
                 swapchain,
                 u64::MAX,
@@ -860,12 +891,15 @@ pub unsafe fn vulkan_routine_8700
 
             let image_in_flight = images_in_flight[image_index as usize];
             if !image_in_flight.is_null() {
-                device.lock().unwrap().wait_for_fences(&[image_in_flight], true, u64::MAX).unwrap();
+                dvc.wait_for_fences(&[image_in_flight], true, u64::MAX).unwrap();
             }
             images_in_flight[image_index as usize] = in_flight_fences[frame];
             let wait_semaphores = vec![image_available_semaphores[frame]];
 
             let framebuffer = swapchain_framebuffers[image_index as usize];
+
+            drop(dvc);
+
             let cb_34 = record_cb_219
             (
                 device.clone(),
