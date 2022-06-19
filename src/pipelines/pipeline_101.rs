@@ -186,7 +186,7 @@ pub unsafe fn pipeline_101
         .viewports(&viewports)
         .scissors(&scissors);
     let rasterizer = vk::PipelineRasterizationStateCreateInfoBuilder::new()
-        .depth_clamp_enable(true)
+        .depth_clamp_enable(false)
         .rasterizer_discard_enable(false)
         .polygon_mode(vk::PolygonMode::LINE)
         .line_width(0.3)

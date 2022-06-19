@@ -107,7 +107,7 @@ pub unsafe fn record_cb_219
     dvc.cmd_begin_render_pass(
         primary_cb,
         &render_pass_begin_info,
-        vk::SubpassContents::SECONDARY_COMMAND_BUFFERS
+        vk::SubpassContents::INLINE,
     );
     dvc.cmd_bind_pipeline(primary_cb, vk::PipelineBindPoint::GRAPHICS, primary_pipeline);
     dvc.cmd_bind_index_buffer(primary_cb, ib, 0, vk::IndexType::UINT32);

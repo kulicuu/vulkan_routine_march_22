@@ -65,14 +65,7 @@ const FRAMES_IN_FLIGHT: usize = 2;
 const LAYER_KHRONOS_VALIDATION: *const c_char = cstr!("VK_LAYER_KHRONOS_validation");
 const SHADER_VERT: &[u8] = include_bytes!("../spv/s_400_.vert.spv");
 const SHADER_FRAG: &[u8] = include_bytes!("../spv/s1.frag.spv");
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-struct FrameData {
-    present_semaphore: vk::Semaphore,
-    render_semaphore: vk::Semaphore,
-    command_pool: vk::CommandPool,
-    command_buffer: vk::CommandBuffer,
-}
+
 
 #[derive(Debug, StructOpt)]
 struct Opt {
@@ -94,11 +87,10 @@ unsafe extern "system" fn debug_callback(
     vk::FALSE
 }
 
-
 pub unsafe fn vulkan_routine_8700
 ()
 {
-    let opt = Opt { validation_layers: false };
+    let opt = Opt { validation_layers: true };
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
         .with_title(TITLE)
@@ -829,6 +821,10 @@ pub unsafe fn vulkan_routine_8700
 
     thread::spawn(state_thread_closure);
 
+    
+
+
+
 
 
     #[allow(clippy::collapsible_match, clippy::single_match)]
@@ -887,7 +883,9 @@ pub unsafe fn vulkan_routine_8700
                 vk::Fence::null(),
             ).unwrap();
 
-            let next_index = (image_index + 1) % 3;
+
+
+            // let next_index = (image_index + 1) % 3;
 
             let image_in_flight = images_in_flight[image_index as usize];
             if !image_in_flight.is_null() {
@@ -898,7 +896,14 @@ pub unsafe fn vulkan_routine_8700
 
             let framebuffer = swapchain_framebuffers[image_index as usize];
 
+
+
+            // let cbs_35 = [pre_r_cbs[image_index as usize]];
+
+            // drop(dvc);
+
             drop(dvc);
+
 
             let cb_34 = record_cb_219
             (
@@ -921,7 +926,31 @@ pub unsafe fn vulkan_routine_8700
                 *pc_view.lock().unwrap(),
             ).unwrap();
 
+            // let cb_34 = record_cb_219
+            // (
+            //     device.clone(),
+            //     render_pass.clone(),
+            //     command_pools.lock().unwrap()[image_index as usize].clone(),
+            //     // NOTE: We don't actually want to share the command pools across threads,
+            //     // acording to this article: https://vulkan-tutorial.com/Drawing_a_triangle/Drawing/Rendering_and_presentation
+            //     pipeline, // primary_pipeline,
+            //     pipeline_layout,
+            //     &mut primary_command_buffers,
+            //     &mut secondary_command_buffers,
+            //     &framebuffer,
+            //     image_index,
+            //     swapchain_image_extent,
+            //     &indices_terr,
+            //     d_sets.clone(),
+            //     vb,
+            //     ib,
+            //     *pc_view.lock().unwrap(),
+            // ).unwrap();
+
             let cbs_35 = [cb_34];
+
+            let mut dvc = device.lock().unwrap();
+
             let signal_semaphores = vec![render_finished_semaphores[frame]];
             let submit_info = vk::SubmitInfoBuilder::new()
                 .wait_semaphores(&wait_semaphores)
@@ -930,8 +959,8 @@ pub unsafe fn vulkan_routine_8700
                 .signal_semaphores(&signal_semaphores);
 
             let in_flight_fence = in_flight_fences[frame];
-            device.lock().unwrap().reset_fences(&[in_flight_fence]).unwrap();
-            device.lock().unwrap()
+            dvc.reset_fences(&[in_flight_fence]).unwrap();
+            dvc
                 .queue_submit(queue, &[submit_info], in_flight_fence)
                 .unwrap();
             let swapchains = vec![swapchain];
@@ -940,8 +969,10 @@ pub unsafe fn vulkan_routine_8700
                 .wait_semaphores(&signal_semaphores)
                 .swapchains(&swapchains)
                 .image_indices(&image_indices);
-            device.lock().unwrap().queue_present_khr(queue, &present_info).unwrap();
+            dvc.queue_present_khr(queue, &present_info).unwrap();
             frame = (frame + 1) % FRAMES_IN_FLIGHT;
+
+            drop(dvc);
         }
 
 
