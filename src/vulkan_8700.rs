@@ -712,10 +712,8 @@ pub unsafe fn vulkan_routine_8700
         clone ib,
         clone pc_view,
         || {
-        // "Each thread owns its own command-pool to allocate its own command buffer."
-        // I don't know exactly how 
-            let mut dvc = device.lock().unwrap();
-        
+
+            let mut dvc = device.lock().unwrap();        
             let command_pool_info = vk::CommandPoolCreateInfoBuilder::new()
                 .queue_family_index(queue_family)
                 .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
@@ -759,7 +757,6 @@ pub unsafe fn vulkan_routine_8700
                 *cursor_cb.lock().unwrap() = cb.unwrap();
             }
 
-
             unsafe fn record_cb
             <'a>
             (
@@ -782,16 +779,16 @@ pub unsafe fn vulkan_routine_8700
             )
             -> Result<(vk::CommandBuffer), &'a str>
             {
-                let mut dvc = device.lock().unwrap();
-                dvc.reset_command_pool(command_pool, vk::CommandPoolResetFlags::empty()).unwrap();
+                // let mut dvc = device.lock().unwrap();
+                device.lock().unwrap().reset_command_pool(command_pool, vk::CommandPoolResetFlags::empty()).unwrap();
                 let allocate_info = vk::CommandBufferAllocateInfoBuilder::new()
                     .command_pool(command_pool)
                     .level(vk::CommandBufferLevel::PRIMARY)
                     .command_buffer_count(1);
-                let primary_cb = dvc.allocate_command_buffers(&allocate_info).unwrap()[0];
+                let primary_cb = device.lock().unwrap().allocate_command_buffers(&allocate_info).unwrap()[0];
                 // primary_command_buffers[image_index as usize] = primary_cb;
                 let pri_cb_begin_info = vk::CommandBufferBeginInfoBuilder::new();
-                dvc.begin_command_buffer(primary_cb, &pri_cb_begin_info).unwrap();
+                device.lock().unwrap().begin_command_buffer(primary_cb, &pri_cb_begin_info).unwrap();
 
                 let render_pass_begin_info = vk::RenderPassBeginInfoBuilder::new()
                     .render_pass(*render_pass.lock().unwrap())
@@ -801,40 +798,35 @@ pub unsafe fn vulkan_routine_8700
                         extent: swapchain_image_extent,
                     })
                     .clear_values(&clear_values);
-                dvc.cmd_begin_render_pass(
+                device.lock().unwrap().cmd_begin_render_pass(
                     primary_cb,
                     &render_pass_begin_info,
                     vk::SubpassContents::INLINE,
                 );
-                dvc.cmd_bind_pipeline(primary_cb, vk::PipelineBindPoint::GRAPHICS, primary_pipeline);
-                dvc.cmd_bind_index_buffer(primary_cb, ib, 0, vk::IndexType::UINT32);
-                dvc.cmd_bind_vertex_buffers(primary_cb, 0, &[vb], &[0]);
-                dvc.cmd_bind_descriptor_sets(primary_cb, vk::PipelineBindPoint::GRAPHICS, primary_pipeline_layout, 0, &d_sets, &[]);
+                device.lock().unwrap().cmd_bind_pipeline(primary_cb, vk::PipelineBindPoint::GRAPHICS, primary_pipeline);
+                device.lock().unwrap().cmd_bind_index_buffer(primary_cb, ib, 0, vk::IndexType::UINT32);
+                device.lock().unwrap().cmd_bind_vertex_buffers(primary_cb, 0, &[vb], &[0]);
+                device.lock().unwrap().cmd_bind_descriptor_sets(primary_cb, vk::PipelineBindPoint::GRAPHICS, primary_pipeline_layout, 0, &d_sets, &[]);
                 let ptr = std::ptr::addr_of!(pc_view) as *const c_void;
-                dvc.cmd_push_constants
+                device.lock().unwrap().cmd_push_constants
                 (
                     primary_cb,
                     primary_pipeline_layout,
                     vk::ShaderStageFlags::VERTEX,
                     0,
-                    // std::mem::size_of::<PushConstants>() as u32,
                     std::mem::size_of::<glm::Mat4>() as u32,
                     ptr,
                 );
-                dvc.cmd_draw_indexed(primary_cb, (indices_terr.len()) as u32, ((indices_terr.len()) / 3) as u32, 0, 0, 0);
-                dvc.cmd_end_render_pass(primary_cb);
-                dvc.end_command_buffer(primary_cb).unwrap();
-                drop(dvc);
+                device.lock().unwrap().cmd_draw_indexed(primary_cb, (indices_terr.len()) as u32, ((indices_terr.len()) / 3) as u32, 0, 0, 0);
+                device.lock().unwrap().cmd_end_render_pass(primary_cb);
+                device.lock().unwrap().end_command_buffer(primary_cb).unwrap();
                 Ok((primary_cb))
+
             }
-
-
     });
 
     
     thread::spawn(rcb_clo);
-
-
     let (tx, rx) : (mpsc::Sender<u8>, mpsc::Receiver<u8>) = channel();
 
     let state_thread_closure = closure!(
@@ -846,9 +838,12 @@ pub unsafe fn vulkan_routine_8700
             println!("Hello state management thread.");
             let scalar_45 = 0.345;
             let mut counter = 0;
+            let mut attitude = camera_2.lock().unwrap().attitude;
+            let mut position = camera_2.lock().unwrap().position;
             while true {
-                let mut attitude = camera_2.lock().unwrap().attitude;
-                let mut position = camera_2.lock().unwrap().position;
+
+                let input = rx.recv().unwrap();
+
                 // attitude.roll_axis_normal = glm::rotate_vec3(&attitude.roll_axis_normal, scalar_45, &attitude.roll_axis_normal);                
                 // .lock().unwrap().attitude = attitude;
                 // match rx.recv().unwrap() {
@@ -861,18 +856,14 @@ pub unsafe fn vulkan_routine_8700
                 //     _ => println!(" nothing "),
                 // }
 
-
-
-                let ans = rx.recv().unwrap();
-                let mut data_ref = pc_view.lock().unwrap();
-                let cursor = glm::look_at::<f32>
-                (
-                    &position,
-                    &(&position + &attitude.roll_axis_normal),
-                    &attitude.yaw_axis_normal,
-                );
-                let modded = glm::rotate_y(&cursor, 0.053 * (counter as f32));
-                *data_ref = modded; 
+                *pc_view.lock().unwrap() = glm::rotate_y( 
+                    &(glm::look_at::<f32>
+                        (
+                            &position,
+                            &(&position + &attitude.roll_axis_normal),
+                            &attitude.yaw_axis_normal,
+                        )),
+                    0.013 * (counter as f32));
                 counter += 1;
             }
         }
@@ -880,7 +871,6 @@ pub unsafe fn vulkan_routine_8700
 
     thread::spawn(state_thread_closure);
 
-    
 
     let clear_values = vec![
         vk::ClearValue {
@@ -896,11 +886,8 @@ pub unsafe fn vulkan_routine_8700
         },
     ];
 
-
-    let mut free_index: u32 = 1;
-
-
-
+    let mut free_index: u32 = 0;
+    rcb_tx.send(free_index);
 
     #[allow(clippy::collapsible_match, clippy::single_match)]
     event_loop.run(move |event, _, control_flow| match event {
@@ -945,25 +932,10 @@ pub unsafe fn vulkan_routine_8700
             _ => (),
         },
         Event::MainEventsCleared => {
+     
+            device.lock().unwrap().wait_for_fences(&[in_flight_fences[frame]], true, u64::MAX).unwrap();
 
-
-
-
-            let mut dvc = device.lock().unwrap();
-
-            
-            // println!("free_index before: {}", free_index);
-            
-            dvc.wait_for_fences(&[in_flight_fences[frame]], true, u64::MAX).unwrap();
-
-
-            // signal rec_cb thread to record_cb on zero.
-            rcb_tx.send(free_index);
-
-
-            
-
-            let image_index = dvc.acquire_next_image_khr
+            let image_index = device.lock().unwrap().acquire_next_image_khr
             (
                 swapchain,
                 u64::MAX,
@@ -971,51 +943,29 @@ pub unsafe fn vulkan_routine_8700
                 vk::Fence::null(),
             ).unwrap();
 
-
-
-            free_index = (image_index + 1) % 3;
-            // println!("image_index {}", image_index);
-
-
-            // let next_index = (image_index + 1) % 3;
-
             let image_in_flight = images_in_flight[image_index as usize];
             if !image_in_flight.is_null() {
-                dvc.wait_for_fences(&[image_in_flight], true, u64::MAX).unwrap();
+                device.lock().unwrap().wait_for_fences(&[image_in_flight], true, u64::MAX).unwrap();
             }
             images_in_flight[image_index as usize] = in_flight_fences[frame];
             let wait_semaphores = vec![image_available_semaphores[frame]];
-
             let framebuffer = swapchain_framebuffers[image_index as usize];
-
-
-
-            // let cbs_35 = [pre_r_cbs[image_index as usize]];
-
-            // drop(dvc);
-
-            drop(dvc);
-
-            // let cb_34 = *cursor_cb.lock().unwrap();
-
+            let signal_semaphores = vec![render_finished_semaphores[frame]];
+            
             let cbs_35 = [*cursor_cb.lock().unwrap()];
 
-
-
-            // let cbs_35 = [cb_34];
-
-            let mut dvc = device.lock().unwrap();
-
-            let signal_semaphores = vec![render_finished_semaphores[frame]];
             let submit_info = vk::SubmitInfoBuilder::new()
                 .wait_semaphores(&wait_semaphores)
                 .wait_dst_stage_mask(&[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT])
                 .command_buffers(&cbs_35)
                 .signal_semaphores(&signal_semaphores);
+            
+            free_index = (image_index + 1) % 3;
+            rcb_tx.send(free_index);
 
             let in_flight_fence = in_flight_fences[frame];
-            dvc.reset_fences(&[in_flight_fence]).unwrap();
-            dvc
+            device.lock().unwrap().reset_fences(&[in_flight_fence]).unwrap();
+            device.lock().unwrap()
                 .queue_submit(queue, &[submit_info], in_flight_fence)
                 .unwrap();
             let swapchains = vec![swapchain];
@@ -1024,10 +974,10 @@ pub unsafe fn vulkan_routine_8700
                 .wait_semaphores(&signal_semaphores)
                 .swapchains(&swapchains)
                 .image_indices(&image_indices);
-            dvc.queue_present_khr(queue, &present_info).unwrap();
+            device.lock().unwrap().queue_present_khr(queue, &present_info).unwrap();
             frame = (frame + 1) % FRAMES_IN_FLIGHT;
 
-            drop(dvc);
+
         }
 
 
