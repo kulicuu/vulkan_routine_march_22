@@ -689,11 +689,16 @@ pub unsafe fn vulkan_routine_8700
     let mut frame = 0;
 
     
-    
+    let allocate_info = vk::CommandBufferAllocateInfoBuilder::new()
+    .command_pool(command_pool)
+    .level(vk::CommandBufferLevel::PRIMARY)
+    .command_buffer_count(1);
+    let cursor_cb = Arc::new(Mutex::new(device.lock().unwrap().allocate_command_buffers(&allocate_info).unwrap()[0]));
     
     let (rcb_tx, rcb_rx) : (mpsc::Sender<u32>, mpsc::Receiver<u32>) = channel();
     
     let rcb_clo = closure!(
+        clone cursor_cb,
         move rcb_rx,
         clone device,
         clone render_pass,
@@ -717,8 +722,6 @@ pub unsafe fn vulkan_routine_8700
             let command_pool = dvc.create_command_pool(&command_pool_info, None).unwrap();
             drop(dvc);
 
-
-
             let clear_values = vec![
                 vk::ClearValue {
                     color: vk::ClearColorValue {
@@ -733,18 +736,9 @@ pub unsafe fn vulkan_routine_8700
                 },
             ];
 
-
             while true {
                 let free_index = rcb_rx.recv().unwrap();
                 let framebuffer = swapchain_framebuffers_2.lock().unwrap()[free_index as usize];
-
-
-                // let primary_cb_alloc_info = vk::CommandBufferAllocateInfoBuilder::new()
-                //     .command_pool(*command_pool)
-                //     .level(vk::CommandBufferLevel::PRIMARY)
-                //     .command_buffer_count(1);
-                // let primary_cb = device.lock().unwrap().allocate_command_buffers(&primary_cb_alloc_info).unwrap()[0];
-
 
                 let cb = record_cb(
                     device.clone(),
@@ -762,10 +756,7 @@ pub unsafe fn vulkan_routine_8700
                     *pc_view.lock().unwrap(),
                     &clear_values,
                 );
-
-
-                // println!("cb recorded in other thread {:?}", cb);
-                // println!("free_index in rcb thread: {}", free_index);
+                *cursor_cb.lock().unwrap() = cb.unwrap();
             }
 
 
@@ -961,7 +952,7 @@ pub unsafe fn vulkan_routine_8700
             let mut dvc = device.lock().unwrap();
 
             
-            println!("free_index before: {}", free_index);
+            // println!("free_index before: {}", free_index);
             
             dvc.wait_for_fences(&[in_flight_fences[frame]], true, u64::MAX).unwrap();
 
@@ -983,7 +974,7 @@ pub unsafe fn vulkan_routine_8700
 
 
             free_index = (image_index + 1) % 3;
-            println!("image_index {}", image_index);
+            // println!("image_index {}", image_index);
 
 
             // let next_index = (image_index + 1) % 3;
@@ -1005,51 +996,13 @@ pub unsafe fn vulkan_routine_8700
 
             drop(dvc);
 
+            // let cb_34 = *cursor_cb.lock().unwrap();
 
-            let cb_34 = record_cb_219
-            (
-                device.clone(),
-                render_pass.clone(),
-                command_pools.lock().unwrap()[image_index as usize].clone(),
-                // NOTE: We don't actually want to share the command pools across threads,
-                // acording to this article: https://vulkan-tutorial.com/Drawing_a_triangle/Drawing/Rendering_and_presentation
-                pipeline, // primary_pipeline,
-                pipeline_layout,
-                &mut primary_command_buffers,
-                &mut secondary_command_buffers,
-                &framebuffer,
-                image_index,
-                swapchain_image_extent,
-                &indices_terr,
-                d_sets.clone(),
-                vb,
-                ib,
-                *pc_view.lock().unwrap(),
-                &clear_values,
-            ).unwrap();
+            let cbs_35 = [*cursor_cb.lock().unwrap()];
 
-            // let cb_34 = record_cb_219
-            // (
-            //     device.clone(),
-            //     render_pass.clone(),
-            //     command_pools.lock().unwrap()[image_index as usize].clone(),
-            //     // NOTE: We don't actually want to share the command pools across threads,
-            //     // acording to this article: https://vulkan-tutorial.com/Drawing_a_triangle/Drawing/Rendering_and_presentation
-            //     pipeline, // primary_pipeline,
-            //     pipeline_layout,
-            //     &mut primary_command_buffers,
-            //     &mut secondary_command_buffers,
-            //     &framebuffer,
-            //     image_index,
-            //     swapchain_image_extent,
-            //     &indices_terr,
-            //     d_sets.clone(),
-            //     vb,
-            //     ib,
-            //     *pc_view.lock().unwrap(),
-            // ).unwrap();
 
-            let cbs_35 = [cb_34];
+
+            // let cbs_35 = [cb_34];
 
             let mut dvc = device.lock().unwrap();
 
