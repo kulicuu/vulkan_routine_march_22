@@ -61,7 +61,7 @@ use winit::{
 use closure::closure;
 use structopt::StructOpt;
 const TITLE: &str = "vulkan-routine";
-const FRAMES_IN_FLIGHT: usize = 2;
+const FRAMES_IN_FLIGHT: usize = 3;
 const LAYER_KHRONOS_VALIDATION: *const c_char = cstr!("VK_LAYER_KHRONOS_validation");
 const SHADER_VERT: &[u8] = include_bytes!("../spv/s_400_.vert.spv");
 const SHADER_FRAG: &[u8] = include_bytes!("../spv/s1.frag.spv");
@@ -90,7 +90,7 @@ unsafe extern "system" fn debug_callback(
 pub unsafe fn vulkan_routine_8700
 ()
 {
-    let opt = Opt { validation_layers: true };
+    let opt = Opt { validation_layers: false };
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
         .with_title(TITLE)
@@ -266,6 +266,16 @@ pub unsafe fn vulkan_routine_8700
     }
 
     let swapchain_image_extent = match surface_caps.current_extent {
+        vk::Extent2D {
+            width: u32::MAX,
+            height: u32::MAX,
+        } => {
+            let PhysicalSize { width, height } = window.inner_size();
+            vk::Extent2D { width, height }
+        }
+        normal => normal,
+    };
+    let swapchain_image_extent_2 = match surface_caps.current_extent {
         vk::Extent2D {
             width: u32::MAX,
             height: u32::MAX,
@@ -678,105 +688,161 @@ pub unsafe fn vulkan_routine_8700
     let mut images_in_flight: Vec<_> = swapchain_images.iter().map(|_| vk::Fence::null()).collect();
     let mut frame = 0;
 
-    let rcb_clo = closure!(|| {
+    
+    
+    
+    let (rcb_tx, rcb_rx) : (mpsc::Sender<u32>, mpsc::Receiver<u32>) = channel();
+    
+    let rcb_clo = closure!(
+        move rcb_rx,
+        clone device,
+        clone render_pass,
+        clone pipeline,
+        clone pipeline_layout,
+        clone swapchain_framebuffers_2,
+        move swapchain_image_extent_2,
+        clone indices_terr,
+        clone d_sets,
+        clone vb,
+        clone ib,
+        clone pc_view,
+        || {
         // "Each thread owns its own command-pool to allocate its own command buffer."
         // I don't know exactly how 
-
+            let mut dvc = device.lock().unwrap();
         
+            let command_pool_info = vk::CommandPoolCreateInfoBuilder::new()
+                .queue_family_index(queue_family)
+                .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
+            let command_pool = dvc.create_command_pool(&command_pool_info, None).unwrap();
+            drop(dvc);
 
 
+
+            let clear_values = vec![
+                vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [0.0, 0.0, 0.0, 1.0],
+                    },
+                },
+                vk::ClearValue {
+                    depth_stencil: vk::ClearDepthStencilValue {
+                        depth: 1.0,
+                        stencil: 0,
+                    },
+                },
+            ];
+
+
+            while true {
+                let free_index = rcb_rx.recv().unwrap();
+                let framebuffer = swapchain_framebuffers_2.lock().unwrap()[free_index as usize];
+
+
+                // let primary_cb_alloc_info = vk::CommandBufferAllocateInfoBuilder::new()
+                //     .command_pool(*command_pool)
+                //     .level(vk::CommandBufferLevel::PRIMARY)
+                //     .command_buffer_count(1);
+                // let primary_cb = device.lock().unwrap().allocate_command_buffers(&primary_cb_alloc_info).unwrap()[0];
+
+
+                let cb = record_cb(
+                    device.clone(),
+                    render_pass.clone(),
+                    command_pool,
+                    pipeline,
+                    pipeline_layout,
+                    &framebuffer,
+                    free_index,
+                    swapchain_image_extent_2,
+                    &indices_terr,
+                    d_sets.clone(),
+                    vb,
+                    ib,
+                    *pc_view.lock().unwrap(),
+                    &clear_values,
+                );
+
+
+                // println!("cb recorded in other thread {:?}", cb);
+                // println!("free_index in rcb thread: {}", free_index);
+            }
+
+
+            unsafe fn record_cb
+            <'a>
+            (
+                device: Arc<Mutex<DeviceLoader>>,
+                render_pass: Arc<Mutex<vk::RenderPass>>,
+                command_pool: vk::CommandPool,
+                primary_pipeline: vk::Pipeline,
+                primary_pipeline_layout: vk::PipelineLayout,
+                // primary_command_buffer: vk::CommandBuffer,
+                framebuffer: &vk::Framebuffer,
+                image_index: u32,
+                swapchain_image_extent: vk::Extent2D,
+                indices_terr: &Vec<u32>,
+                d_sets: erupt::SmallVec<vk::DescriptorSet>,
+                vb: vk::Buffer,
+                ib: vk::Buffer,
+                pc_view: glm::Mat4,
+                clear_values: &Vec<vk::ClearValue>,
+            
+            )
+            -> Result<(vk::CommandBuffer), &'a str>
+            {
+                let mut dvc = device.lock().unwrap();
+                dvc.reset_command_pool(command_pool, vk::CommandPoolResetFlags::empty()).unwrap();
+                let allocate_info = vk::CommandBufferAllocateInfoBuilder::new()
+                    .command_pool(command_pool)
+                    .level(vk::CommandBufferLevel::PRIMARY)
+                    .command_buffer_count(1);
+                let primary_cb = dvc.allocate_command_buffers(&allocate_info).unwrap()[0];
+                // primary_command_buffers[image_index as usize] = primary_cb;
+                let pri_cb_begin_info = vk::CommandBufferBeginInfoBuilder::new();
+                dvc.begin_command_buffer(primary_cb, &pri_cb_begin_info).unwrap();
+
+                let render_pass_begin_info = vk::RenderPassBeginInfoBuilder::new()
+                    .render_pass(*render_pass.lock().unwrap())
+                    .framebuffer(*framebuffer)
+                    .render_area(vk::Rect2D {
+                        offset: vk::Offset2D { x: 0, y: 0 },
+                        extent: swapchain_image_extent,
+                    })
+                    .clear_values(&clear_values);
+                dvc.cmd_begin_render_pass(
+                    primary_cb,
+                    &render_pass_begin_info,
+                    vk::SubpassContents::INLINE,
+                );
+                dvc.cmd_bind_pipeline(primary_cb, vk::PipelineBindPoint::GRAPHICS, primary_pipeline);
+                dvc.cmd_bind_index_buffer(primary_cb, ib, 0, vk::IndexType::UINT32);
+                dvc.cmd_bind_vertex_buffers(primary_cb, 0, &[vb], &[0]);
+                dvc.cmd_bind_descriptor_sets(primary_cb, vk::PipelineBindPoint::GRAPHICS, primary_pipeline_layout, 0, &d_sets, &[]);
+                let ptr = std::ptr::addr_of!(pc_view) as *const c_void;
+                dvc.cmd_push_constants
+                (
+                    primary_cb,
+                    primary_pipeline_layout,
+                    vk::ShaderStageFlags::VERTEX,
+                    0,
+                    // std::mem::size_of::<PushConstants>() as u32,
+                    std::mem::size_of::<glm::Mat4>() as u32,
+                    ptr,
+                );
+                dvc.cmd_draw_indexed(primary_cb, (indices_terr.len()) as u32, ((indices_terr.len()) / 3) as u32, 0, 0, 0);
+                dvc.cmd_end_render_pass(primary_cb);
+                dvc.end_command_buffer(primary_cb).unwrap();
+                drop(dvc);
+                Ok((primary_cb))
+            }
 
 
     });
 
-    let (rcb_tx, rcb_rx) : (mpsc::Sender<u8>, mpsc::Receiver<u8>) = channel();
+    
+    thread::spawn(rcb_clo);
 
-    let rcb_closure = closure!(
-        clone rcb_tx,
-        clone device,
-        clone render_pass,
-        move queue_family_2,
-        move pipeline_2,
-        move pipeline_layout_2,
-        clone command_pools,
-        move vb_2,
-        move ib_2,
-        clone swapchain_framebuffers_2,
-        ||
-        {
-
-
-
-
-
-
-            // unsafe fn rec_cb_220
-            // <'a>
-            // (
-            //     device: Arc<Mutex<DeviceLoader>>,
-            //     render_pass: Arc<Mutex<vk::RenderPass>>,
-            //     command_pool: Arc<Mutex<vk::CommandPool>>,
-            //     pipeline: vk::Pipeline,
-            //     pipeline_layout: vk::PipelineLayout,
-            //     framebuffer: Arc<Mutex<vk::Framebuffer>>,
-            //     primary_cbs: Arc<Mutex<Vec<vk::CommandBuffer>>>,
-
-            //     pc_view: glm::Mat4,
-            // )
-
-            // -> Result<(), &'a str>
-            // {
-            //     let mut device_locked = device.lock().unwrap();
-            //     let mut command_pool_locked = command_pool.lock().unwrap();
-            //     device_locked.reset_command_pool(*command_pool_locked, vk::CommandPoolResetFlags::empty()).unwrap();
-            //     let allocate_info = vk::CommandBufferAllocateInfoBuilder::new()
-            //         .command_pool(*command_pool_locked)
-            //         .level(vk::CommandBufferLevel::PRIMARY)
-            //         .command_buffer_count(1);
-            //     let primary_cb = device_locked.allocate_command_buffers(&allocate_info).unwrap()[0];
-
-            //     let cb_begin_info = vk::CommandBufferBeginInfoBuilder::new();
-            //     device_locked.begin_command_buffer(primary_cb, &cb_begin_info).unwrap();
-            //     let clear_values = vec![
-            //         vk::ClearValue {
-            //             color: vk::ClearColorValue {
-            //                 float32: [0.0, 0.0, 0.0, 1.0],
-            //             },
-            //         },
-            //         vk::ClearValue {
-            //             depth_stencil: vk::ClearDepthStencilValue {
-            //                 depth: 1.0,
-            //                 stencil: 0,
-            //             },
-            //         },
-            //     ];
-            //     let render_pass_begin_info = vk::RenderPassBeginInfoBuilder::new()
-            //         .render_pass(*render_pass.lock().unwrap())
-            //         .framebuffer(*framebuffer)
-            //         .render_area(vk::Rect2D {
-            //             offset: vk::Offset2D { x: 0, y: 0 },
-            //             extent: swapchain_image_extent,
-            //         })
-            //         .clear_values(&clear_values);
-            //     device_locked.cmd_begin_render_pass(
-            //         primary_cb,
-            //         &render_pass_begin_info,
-            //         vk::SubpassContents::SECONDARY_COMMAND_BUFFERS
-            //     );
-            //     device_locked.cmd_bind_pipeline(primary_cb, vk::PipelineBindPoint::GRAPHICS, primary_pipeline);
-            //     device_locked.cmd_bind_index_buffer(primary_cb, ib, 0, vk::IndexType::UINT32);
-            //     device_locked.cmd_bind_vertex_buffers(primary_cb, 0, &[vb], &[0]);
-            //     device_locked.cmd_bind_descriptor_sets(primary_cb, vk::PipelineBindPoint::GRAPHICS, pipeline_layout, 0, &d_sets, &[]);
-
-            //     drop(device_locked);
-            //     drop(command_pool_locked);
-            //     Ok(())
-            // }
-
-        }
-    );
-
-    thread::spawn(rcb_closure);
 
     let (tx, rx) : (mpsc::Sender<u8>, mpsc::Receiver<u8>) = channel();
 
@@ -804,6 +870,8 @@ pub unsafe fn vulkan_routine_8700
                 //     _ => println!(" nothing "),
                 // }
 
+
+
                 let ans = rx.recv().unwrap();
                 let mut data_ref = pc_view.lock().unwrap();
                 let cursor = glm::look_at::<f32>
@@ -823,6 +891,22 @@ pub unsafe fn vulkan_routine_8700
 
     
 
+    let clear_values = vec![
+        vk::ClearValue {
+            color: vk::ClearColorValue {
+                float32: [0.0, 0.0, 0.0, 1.0],
+            },
+        },
+        vk::ClearValue {
+            depth_stencil: vk::ClearDepthStencilValue {
+                depth: 1.0,
+                stencil: 0,
+            },
+        },
+    ];
+
+
+    let mut free_index: u32 = 1;
 
 
 
@@ -871,9 +955,22 @@ pub unsafe fn vulkan_routine_8700
         },
         Event::MainEventsCleared => {
 
+
+
+
             let mut dvc = device.lock().unwrap();
 
+            
+            println!("free_index before: {}", free_index);
+            
             dvc.wait_for_fences(&[in_flight_fences[frame]], true, u64::MAX).unwrap();
+
+
+            // signal rec_cb thread to record_cb on zero.
+            rcb_tx.send(free_index);
+
+
+            
 
             let image_index = dvc.acquire_next_image_khr
             (
@@ -883,6 +980,10 @@ pub unsafe fn vulkan_routine_8700
                 vk::Fence::null(),
             ).unwrap();
 
+
+
+            free_index = (image_index + 1) % 3;
+            println!("image_index {}", image_index);
 
 
             // let next_index = (image_index + 1) % 3;
@@ -924,6 +1025,7 @@ pub unsafe fn vulkan_routine_8700
                 vb,
                 ib,
                 *pc_view.lock().unwrap(),
+                &clear_values,
             ).unwrap();
 
             // let cb_34 = record_cb_219
@@ -977,6 +1079,8 @@ pub unsafe fn vulkan_routine_8700
 
 
         Event::LoopDestroyed => unsafe {
+
+            println!("\n\n\n Loop destroyed, ending program.\n\n");
             device.lock().unwrap().device_wait_idle().unwrap();
             for &semaphore in image_available_semaphores
                 .iter()

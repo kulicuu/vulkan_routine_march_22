@@ -189,8 +189,10 @@ pub unsafe fn pipeline_101
         .depth_clamp_enable(false)
         .rasterizer_discard_enable(false)
         .polygon_mode(vk::PolygonMode::LINE)
-        .line_width(0.3)
-        .cull_mode(vk::CullModeFlags::NONE)
+        .line_width(1.0)
+        
+        .cull_mode(vk::CullModeFlags::FRONT)
+        // .cull_mode(vk::CullModeFlags::NONE)
         .front_face(vk::FrontFace::COUNTER_CLOCKWISE);
     let multisampling = vk::PipelineMultisampleStateCreateInfoBuilder::new()
         .sample_shading_enable(false)

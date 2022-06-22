@@ -68,6 +68,7 @@ pub unsafe fn record_cb_219
     vb: vk::Buffer,
     ib: vk::Buffer,
     pc_view: glm::Mat4,
+    clear_values: &Vec<vk::ClearValue>,
 
 )
 -> Result<(vk::CommandBuffer), &'a str>
@@ -83,19 +84,7 @@ pub unsafe fn record_cb_219
     primary_command_buffers[image_index as usize] = primary_cb;
     let pri_cb_begin_info = vk::CommandBufferBeginInfoBuilder::new();
     dvc.begin_command_buffer(primary_cb, &pri_cb_begin_info).unwrap();
-    let clear_values = vec![
-        vk::ClearValue {
-            color: vk::ClearColorValue {
-                float32: [0.0, 0.0, 0.0, 1.0],
-            },
-        },
-        vk::ClearValue {
-            depth_stencil: vk::ClearDepthStencilValue {
-                depth: 1.0,
-                stencil: 0,
-            },
-        },
-    ];
+
     let render_pass_begin_info = vk::RenderPassBeginInfoBuilder::new()
         .render_pass(*render_pass.lock().unwrap())
         .framebuffer(*framebuffer)
