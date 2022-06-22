@@ -840,31 +840,62 @@ pub unsafe fn vulkan_routine_8700
             let mut counter = 0;
             let mut attitude = camera_2.lock().unwrap().attitude;
             let mut position = camera_2.lock().unwrap().position;
+
+
+            let mut y_counter = 0;
+            let mut x_counter = 0;
             while true {
 
                 let input = rx.recv().unwrap();
 
-                // attitude.roll_axis_normal = glm::rotate_vec3(&attitude.roll_axis_normal, scalar_45, &attitude.roll_axis_normal);                
-                // .lock().unwrap().attitude = attitude;
-                // match rx.recv().unwrap() {
-                //     0 => *attitude.roll_axis_normal = *glm::rotate_vec3(&attitude.roll_axis_normal, scalar_45, &attitude.roll_axis_normal),
-                //     1 => *attitude.roll_axis_normal = *glm::rotate_vec3(&attitude.roll_axis_normal, -scalar_45, &attitude.roll_axis_normal),
-                //     2 => *attitude.pitch_axis_normal = *glm::rotate_vec3(&attitude.pitch_axis_normal, scalar_45, &attitude.pitch_axis_normal),
-                //     3 => *attitude.pitch_axis_normal = *glm::rotate_vec3(&attitude.pitch_axis_normal, -scalar_45, &attitude.pitch_axis_normal),
-                //     4 => *attitude.yaw_axis_normal = *glm::rotate_vec3(&attitude.yaw_axis_normal, scalar_45, &attitude.yaw_axis_normal),
-                //     5 => *attitude.yaw_axis_normal = *glm::rotate_vec3(&attitude.yaw_axis_normal, scalar_45, &attitude.yaw_axis_normal),
-                //     _ => println!(" nothing "),
-                // }
-
-                *pc_view.lock().unwrap() = glm::rotate_y( 
-                    &(glm::look_at::<f32>
-                        (
-                            &position,
-                            &(&position + &attitude.roll_axis_normal),
-                            &attitude.yaw_axis_normal,
-                        )),
-                    0.013 * (counter as f32));
-                counter += 1;
+                match input {
+                    0 => {
+                        y_counter += 1;
+                        *pc_view.lock().unwrap() = glm::rotate_y( 
+                            &(glm::look_at::<f32>
+                                (
+                                    &position,
+                                    &(&position + &attitude.roll_axis_normal),
+                                    &attitude.yaw_axis_normal,
+                                )),
+                            0.013 * (y_counter as f32));
+                    },
+                    1 => {
+                        y_counter -= 1;
+                        *pc_view.lock().unwrap() = glm::rotate_y( 
+                            &(glm::look_at::<f32>
+                                (
+                                    &position,
+                                    &(&position + &attitude.roll_axis_normal),
+                                    &attitude.yaw_axis_normal,
+                                )),
+                            0.013 * (y_counter as f32));
+                    },
+                    2 => {
+                        x_counter += 1;
+                        *pc_view.lock().unwrap() = glm::rotate_x( 
+                            &(glm::look_at::<f32>
+                                (
+                                    &position,
+                                    &(&position + &attitude.roll_axis_normal),
+                                    &attitude.yaw_axis_normal,
+                                )),
+                            0.013 * (x_counter as f32));
+                    },
+                    3 => {
+                        x_counter -= 1;
+                        *pc_view.lock().unwrap() = glm::rotate_x( 
+                            &(glm::look_at::<f32>
+                                (
+                                    &position,
+                                    &(&position + &attitude.roll_axis_normal),
+                                    &attitude.yaw_axis_normal,
+                                )),
+                            0.013 * (x_counter as f32));
+                    },
+                    _ => {
+                    }
+                }
             }
         }
     );
