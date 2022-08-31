@@ -15,7 +15,8 @@ pub fn load_model
 () 
 -> Result<(Vec<VertexV3>, Vec<u32>), &'a str> 
 {
-    let model_path: & str = "assets/terrain__002__.obj";
+    // let model_path: & str = "assets/terrain__002__.obj";
+    let model_path: & str = "assets/shuttle.obj";
     let (models, materials) = tobj::load_obj(&model_path, &tobj::LoadOptions::default()).expect("Failed to load model object!");
     let model = models[0].clone();
     let materials = materials.unwrap();

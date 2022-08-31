@@ -98,7 +98,8 @@ pub unsafe fn vulkan_routine_8700
         .with_maximized(true)
         .build(&event_loop)
         .unwrap();
-    let entry = Arc::new(EntryLoader::new().unwrap());
+    // let entry = Arc::new(EntryLoader::new().unwrap());
+    let entry = EntryLoader::new().unwrap();
     let application_name = CString::new("Vulkan-Routine-8700").unwrap();
     let engine_name = CString::new("Peregrine").unwrap();
     let app_info = vk::ApplicationInfoBuilder::new()
@@ -155,21 +156,8 @@ pub unsafe fn vulkan_routine_8700
     };
     let surface = surface::create_surface(&instance, &window, None).unwrap();
 
-    let device_extensions = vec![  // trying to type the contents of this vector to be able to pass between functions..todo.
-        vk::KHR_SWAPCHAIN_EXTENSION_NAME,
-        vk::KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
-        vk::KHR_RAY_QUERY_EXTENSION_NAME,
-        vk::KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
-        vk::KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
-        vk::KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME,
-        vk::KHR_SPIRV_1_4_EXTENSION_NAME,
-        vk::KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
-        vk::EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
-    ];
 
-    let (physical_device, queue_family, format, present_mode, device_properties) =
-
-    instance.enumerate_physical_devices(None)
+    let (physical_device, queue_family, format, present_mode, device_properties) = instance.enumerate_physical_devices(None)
     .unwrap()
     .into_iter()
     .filter_map(|physical_device| {
@@ -271,6 +259,7 @@ pub unsafe fn vulkan_routine_8700
             height: u32::MAX,
         } => {
             let PhysicalSize { width, height } = window.inner_size();
+            // vk::Extent2D { width: 4000, height: 4000 }
             vk::Extent2D { width, height }
         }
         normal => normal,
@@ -281,7 +270,8 @@ pub unsafe fn vulkan_routine_8700
             height: u32::MAX,
         } => {
             let PhysicalSize { width, height } = window.inner_size();
-            vk::Extent2D { width, height }
+            // vk::Extent2D { width, height }
+            vk::Extent2D { width: 1000, height: 1000 }
         }
         normal => normal,
     };
@@ -609,8 +599,6 @@ pub unsafe fn vulkan_routine_8700
         &swapchain_image_extent,
     ).unwrap();
 
-
-
     let swapchain_framebuffers_pre: Vec<_> = swapchain_image_views
         .iter()
         .map(|image_view| {
@@ -713,7 +701,7 @@ pub unsafe fn vulkan_routine_8700
         clone pc_view,
         || {
 
-            let mut dvc = device.lock().unwrap();        
+            let mut dvc = device.lock().unwrap();
             let command_pool_info = vk::CommandPoolCreateInfoBuilder::new()
                 .queue_family_index(queue_family)
                 .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
@@ -825,8 +813,8 @@ pub unsafe fn vulkan_routine_8700
             }
     });
 
-    
     thread::spawn(rcb_clo);
+
     let (tx, rx) : (mpsc::Sender<u8>, mpsc::Receiver<u8>) = channel();
 
     let state_thread_closure = closure!(
@@ -835,68 +823,83 @@ pub unsafe fn vulkan_routine_8700
         move camera_2,
         ||
         {
-            println!("Hello state management thread.");
             let scalar_45 = 0.345;
             let mut counter = 0;
             let mut attitude = camera_2.lock().unwrap().attitude;
             let mut position = camera_2.lock().unwrap().position;
 
-
             let mut y_counter = 0;
             let mut x_counter = 0;
+
+            let ten_millis = time::Duration::from_millis(10);
+            
+            
+
             while true {
-
-                let input = rx.recv().unwrap();
-
-                match input {
-                    0 => {
-                        y_counter += 1;
-                        *pc_view.lock().unwrap() = glm::rotate_y( 
-                            &(glm::look_at::<f32>
-                                (
-                                    &position,
-                                    &(&position + &attitude.roll_axis_normal),
-                                    &attitude.yaw_axis_normal,
-                                )),
-                            0.013 * (y_counter as f32));
-                    },
-                    1 => {
-                        y_counter -= 1;
-                        *pc_view.lock().unwrap() = glm::rotate_y( 
-                            &(glm::look_at::<f32>
-                                (
-                                    &position,
-                                    &(&position + &attitude.roll_axis_normal),
-                                    &attitude.yaw_axis_normal,
-                                )),
-                            0.013 * (y_counter as f32));
-                    },
-                    2 => {
-                        x_counter += 1;
-                        *pc_view.lock().unwrap() = glm::rotate_x( 
-                            &(glm::look_at::<f32>
-                                (
-                                    &position,
-                                    &(&position + &attitude.roll_axis_normal),
-                                    &attitude.yaw_axis_normal,
-                                )),
-                            0.013 * (x_counter as f32));
-                    },
-                    3 => {
-                        x_counter -= 1;
-                        *pc_view.lock().unwrap() = glm::rotate_x( 
-                            &(glm::look_at::<f32>
-                                (
-                                    &position,
-                                    &(&position + &attitude.roll_axis_normal),
-                                    &attitude.yaw_axis_normal,
-                                )),
-                            0.013 * (x_counter as f32));
-                    },
-                    _ => {
-                    }
-                }
+                thread::sleep(ten_millis);
+                y_counter += 1;
+                *pc_view.lock().unwrap() = glm::rotate_y( 
+                    &(glm::look_at::<f32>
+                        (
+                            &position,
+                            &(&position + &attitude.roll_axis_normal),
+                            &attitude.yaw_axis_normal,
+                        )),
+                    0.013 * (y_counter as f32));
             }
+
+
+            // while true {
+            //     let input = rx.recv().unwrap();
+            //     match input {
+            //         0 => {
+            //             y_counter += 1;
+            //             *pc_view.lock().unwrap() = glm::rotate_y( 
+            //                 &(glm::look_at::<f32>
+            //                     (
+            //                         &position,
+            //                         &(&position + &attitude.roll_axis_normal),
+            //                         &attitude.yaw_axis_normal,
+            //                     )),
+            //                 0.013 * (y_counter as f32));
+            //         },
+            //         1 => {
+            //             y_counter -= 1;
+            //             *pc_view.lock().unwrap() = glm::rotate_y( 
+            //                 &(glm::look_at::<f32>
+            //                     (
+            //                         &position,
+            //                         &(&position + &attitude.roll_axis_normal),
+            //                         &attitude.yaw_axis_normal,
+            //                     )),
+            //                 0.013 * (y_counter as f32));
+            //         },
+            //         2 => {
+            //             x_counter += 1;
+            //             *pc_view.lock().unwrap() = glm::rotate_x( 
+            //                 &(glm::look_at::<f32>
+            //                     (
+            //                         &position,
+            //                         &(&position + &attitude.roll_axis_normal),
+            //                         &attitude.yaw_axis_normal,
+            //                     )),
+            //                 0.013 * (x_counter as f32));
+            //         },
+            //         3 => {
+            //             x_counter -= 1;
+            //             *pc_view.lock().unwrap() = glm::rotate_x( 
+            //                 &(glm::look_at::<f32>
+            //                     (
+            //                         &position,
+            //                         &(&position + &attitude.roll_axis_normal),
+            //                         &attitude.yaw_axis_normal,
+            //                     )),
+            //                 0.013 * (x_counter as f32));
+            //         },
+            //         _ => {
+            //         }
+            //     }
+            // }
         }
     );
 
@@ -919,6 +922,11 @@ pub unsafe fn vulkan_routine_8700
 
     let mut free_index: u32 = 0;
     rcb_tx.send(free_index);
+
+
+    // let hundred_millis = std::time::Duration::from_millis(100);
+
+    // thread::sleep(hundred_millis);
 
     #[allow(clippy::collapsible_match, clippy::single_match)]
     event_loop.run(move |event, _, control_flow| match event {
@@ -963,9 +971,8 @@ pub unsafe fn vulkan_routine_8700
             _ => (),
         },
         Event::MainEventsCleared => {
-     
             device.lock().unwrap().wait_for_fences(&[in_flight_fences[frame]], true, u64::MAX).unwrap();
-
+        
             let image_index = device.lock().unwrap().acquire_next_image_khr
             (
                 swapchain,
@@ -980,7 +987,7 @@ pub unsafe fn vulkan_routine_8700
             }
             images_in_flight[image_index as usize] = in_flight_fences[frame];
             let wait_semaphores = vec![image_available_semaphores[frame]];
-            let framebuffer = swapchain_framebuffers[image_index as usize];
+            let framebuffer = swapchain_framebuffers_2.lock().unwrap()[image_index as usize];
             let signal_semaphores = vec![render_finished_semaphores[frame]];
             
             let cbs_35 = [*cursor_cb.lock().unwrap()];
@@ -1008,12 +1015,9 @@ pub unsafe fn vulkan_routine_8700
             device.lock().unwrap().queue_present_khr(queue, &present_info).unwrap();
             frame = (frame + 1) % FRAMES_IN_FLIGHT;
 
-
         }
 
-
         Event::LoopDestroyed => unsafe {
-
             println!("\n\n\n Loop destroyed, ending program.\n\n");
             device.lock().unwrap().device_wait_idle().unwrap();
             for &semaphore in image_available_semaphores
@@ -1049,18 +1053,7 @@ pub unsafe fn vulkan_routine_8700
         },
         _ => (),
     })
-
-
-
-
-
-
-
-
-
 }
-
-
 
 
 fn mesh_cull_9945
@@ -1070,10 +1063,9 @@ fn mesh_cull_9945
 )
 -> Result <Vec<u32>, &'a str>
 {
-    indices.drain(20000..);
+    // indices.drain(15000..);
     Ok(indices)
 }
-
 
 
 pub fn load_model
@@ -1082,6 +1074,7 @@ pub fn load_model
 -> Result<(Vec<VertexV3>, Vec<u32>), &'a str> 
 {
     let model_path: & str = "assets/terrain__002__.obj";
+    // let model_path: & str = "assets/shuttle.obj";
     let (models, materials) = tobj::load_obj(&model_path, &tobj::LoadOptions::default()).expect("Failed to load model object!");
     let model = models[0].clone();
     let materials = materials.unwrap();
@@ -1106,8 +1099,8 @@ pub fn load_model
     for i in 0..(indices_terr_full.len() / 2) {
         indices_terr.push(indices_terr_full[i]);
     }
-    println!("\n\nBefore {}", indices_terr.len());
+    // println!("\n\nBefore {}", indices_terr.len());
     indices_terr = mesh_cull_9945(indices_terr).unwrap();
-    println!("After: {}\n\n", indices_terr.len());
+    // println!("After: {}\n\n", indices_terr.len());
     Ok((vertices_terr, indices_terr))
 }
